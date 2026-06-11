@@ -344,13 +344,13 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_DeepSeekCoder_HasReasoningEffort()
+    public void GetExecutionConfigForModel_DeepSeekFlash_HasReasoningEffort()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-coder-6.7b-instruct", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-v4-flash", registry.ModelToProvider);
 
         Assert.False(string.IsNullOrWhiteSpace(config.ReasoningEffort));
     }
