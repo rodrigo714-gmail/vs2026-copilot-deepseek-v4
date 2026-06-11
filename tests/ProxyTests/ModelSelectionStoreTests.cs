@@ -37,7 +37,7 @@ public class ModelSelectionStoreTests
 
         ModelExecutionConfig config = store.GetExecutionConfigForModel("nonexistent-model-xyz", registry.ModelToProvider);
 
-        Assert.NotNull(config);
+        Assert.False(config.OverrideClientParams);
     }
 
     [Fact]
