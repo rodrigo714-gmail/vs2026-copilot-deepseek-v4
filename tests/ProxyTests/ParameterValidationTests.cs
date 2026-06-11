@@ -464,20 +464,17 @@ public class ParameterValidationTests
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
     [InlineData("moonshotai/kimi-k2.6",          262_144, 262_144)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
-    [InlineData("openai/gpt-oss-120b",             131_072, 65_536)]
     [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
     // OpenAI (5)
     [InlineData("gpt-5",      400_000, 128_000)]
     [InlineData("gpt-5-mini", 400_000, 128_000)]
     [InlineData("gpt-4.1",  1_048_576,  32_768)]
     [InlineData("gpt-4o",     128_000,   8_192)]
-    [InlineData("gpt-oss-120b", 131_072, 65_536)]
     // Groq (5)
     [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
     [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
     [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
     [InlineData("openai/gpt-oss-20b",         131_072, 65_536)]
-    // (openai/gpt-oss-120b already covered in NVIDIA section above; both share the same context+max_output)
     // Moonshot/Kimi (5)
     [InlineData("kimi-k2.5",          262_144, 262_144)]
     [InlineData("moonshot-v1-128k",   131_072,  32_768)]
@@ -619,8 +616,8 @@ public class ParameterValidationTests
     [InlineData("openrouter", 5)]    // 2 free + 3 premium coding models
     [InlineData("moonshot", 5)]      // kimi-k2.6/2.5 + 3 moonshot-v1 (8k disabled)
     [InlineData("cerebras", 2)]      // both available in the catalog
-    [InlineData("ollama", 6)]        // 5 ollamacloud.json (qwen3-coder x2, devstral, kimi, ds) + 1 ollama.json (mistral)
-    [InlineData("ollamacloud", 10)]  // key not present in registry — falls back to default preferred
+    [InlineData("ollama", 8)]        // 7 ollamacloud.json (qwen3-coder x2, devstral, kimi, ds, glm-5.1, minimax-m3) + 1 ollama.json (mistral)
+    [InlineData("ollamacloud", 10)]  // 7 enabled + disabled entries — key not in registry, falls back to default preferred
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {
         ModelSelectionStore store = new();

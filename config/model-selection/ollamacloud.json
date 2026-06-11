@@ -85,7 +85,7 @@
     {
       "match": "glm-5.1",
       "priority": 6,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 128000,
         "max_output_tokens": 32768,
@@ -149,7 +149,7 @@
     {
       "match": "minimax-m3",
       "priority": 10,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 128000,
         "max_output_tokens": 32768,
