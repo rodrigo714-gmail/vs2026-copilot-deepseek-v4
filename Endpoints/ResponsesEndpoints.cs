@@ -49,7 +49,7 @@ internal static class ResponsesEndpoints
 
                         string candidateBody = modifiedRequest ?? chatCompletionsBody;
                         candidateBody = requestTransformer.ReplaceModelInRequestBody(candidateBody, candidateUpstream);
-                        candidateBody = requestTransformer.ApplyExecutionDefaults(candidateBody, effectiveModel, candidateProvider.Name);
+                        candidateBody = requestTransformer.ApplyExecutionDefaults(candidateBody, effectiveModel, candidateProvider.Capabilities);
 
                         if (candidateProvider.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase))
                             continue; // skip ollama for Responses API
@@ -93,7 +93,7 @@ internal static class ResponsesEndpoints
 
             string streamBody = modifiedRequest ?? chatCompletionsBody;
             streamBody = requestTransformer.ReplaceModelInRequestBody(streamBody, upstreamModel);
-            streamBody = requestTransformer.ApplyExecutionDefaults(streamBody, effectiveModel, provider.Name);
+            streamBody = requestTransformer.ApplyExecutionDefaults(streamBody, effectiveModel, provider.Capabilities);
 
             if (provider.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase))
             {
