@@ -60,7 +60,7 @@
       "priority": 4,
       "enabled": true,
       "execution": {
-        "context_length": 131072
+        "context_length": 131072,
         "max_output_tokens": 32768,
         "supports_tools": true,
         "supports_vision": true,
@@ -76,7 +76,7 @@
       "priority": 5,
       "enabled": true,
       "execution": {
-        "context_length": 131072
+        "context_length": 131072,
         "max_output_tokens": 32768,
         "supports_tools": true,
         "supports_vision": false,
