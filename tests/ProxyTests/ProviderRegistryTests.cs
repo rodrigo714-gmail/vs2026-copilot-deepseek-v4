@@ -16,7 +16,7 @@ public class ProviderRegistryTests
 
         ProviderInfo result = registry.ResolveProvider(null);
 
-        
+
         Assert.Equal("deepseek", result.Name);
     }
 
@@ -28,7 +28,7 @@ public class ProviderRegistryTests
 
         ProviderInfo result = registry.ResolveProvider("");
 
-        
+
         Assert.Equal("deepseek", result.Name);
     }
 
