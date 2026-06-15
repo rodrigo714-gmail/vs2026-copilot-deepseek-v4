@@ -73,30 +73,28 @@ public class ModelCatalogServiceTests : IDisposable
         HashSet<string> requested = new(perProviderModels.Keys, StringComparer.OrdinalIgnoreCase);
         foreach (string name in requested)
         {
-            string prefix = name.ToUpperInvariant();
+            // Use capabilities to determine the correct env-var prefix (e.g. OLLAMACLOUD for ollama).
+            string prefix = ProviderCapabilitiesRegistry.TryGet(name, out ProviderCapabilities caps)
+                ? caps.EnvPrefix
+                : name.ToUpperInvariant();
             string baseUrl = $"http://{name}.test/";
+            Environment.SetEnvironmentVariable($"PROVIDER_{prefix}_API_KEY", AnyKey);
+            // Backward compatibility: Ollama also reads PROVIDER_OLLAMA_API_KEY as fallback
             if (ollama.Contains(name))
             {
-                Environment.SetEnvironmentVariable("PROVIDER_OLLAMACLOUD_API_KEY", AnyKey);
                 Environment.SetEnvironmentVariable("PROVIDER_OLLAMA_API_KEY", null);
-            }
-            else
-            {
-                Environment.SetEnvironmentVariable($"PROVIDER_{prefix}_API_KEY", AnyKey);
             }
             Environment.SetEnvironmentVariable($"PROVIDER_{prefix}_BASE_URL", baseUrl);
         }
 
         // Clear anything the host environment might have set that isn't in our list.
-        // The env-var suffix for "ollama" is "OLLAMACLOUD" (not "OLLAMA"): ProviderRegistry's
-        // `providerName == "ollama"` branch reads PROVIDER_OLLAMACLOUD_API_KEY first. So when
-        // "ollama" is in `requested`, we must NOT clear PROVIDER_OLLAMACLOUD_API_KEY.
         bool ollamaRequested = requested.Contains("ollama");
-        foreach (string prov in new[] { "DEEPSEEK", "OPENAI", "NVIDIA", "OPENROUTER", "GROQ", "OLLAMA", "MOONSHOT" })
+        foreach (string provName in ProviderCapabilitiesRegistry.KnownProviders)
         {
-            if (!requested.Contains(prov))
+            ProviderCapabilities caps = ProviderCapabilitiesRegistry.Get(provName);
+            if (!requested.Contains(provName))
             {
-                Environment.SetEnvironmentVariable($"PROVIDER_{prov}_API_KEY", null);
+                Environment.SetEnvironmentVariable($"PROVIDER_{caps.EnvPrefix}_API_KEY", null);
             }
         }
         if (!ollamaRequested)
@@ -121,7 +119,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("deepseek", registry.ResolveProvider("deepseek-v4-pro")!.Value.Name);
+        Assert.Equal("deepseek", registry.ResolveProvider("deepseek-v4-pro").Name);
         Assert.Equal("deepseek", registry.ModelToProvider["deepseek-v4-pro"]!.Name);
         Assert.Equal("deepseek", registry.ModelToProvider["deepseek-v4-pro@deepseek"]!.Name);
         Assert.Contains("deepseek-v4-pro", catalog.AvailableModels);
@@ -135,7 +133,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("openai", registry.ResolveProvider("gpt-5")!.Value.Name);
+        Assert.Equal("openai", registry.ResolveProvider("gpt-5").Name);
         Assert.Equal("openai", registry.ModelToProvider["gpt-5@openai"]!.Name);
     }
 
@@ -147,7 +145,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("nvidia", registry.ResolveProvider("nvidia/llama-3.1-nemotron-70b-instruct")!.Value.Name);
+        Assert.Equal("nvidia", registry.ResolveProvider("nvidia/llama-3.1-nemotron-70b-instruct").Name);
     }
 
     [Fact]
@@ -158,7 +156,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("groq", registry.ResolveProvider("llama-3.3-70b-versatile")!.Value.Name);
+        Assert.Equal("groq", registry.ResolveProvider("llama-3.3-70b-versatile").Name);
     }
 
     [Fact]
@@ -169,7 +167,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("openrouter", registry.ResolveProvider("nvidia/nemotron-3-super-120b-a12b:free")!.Value.Name);
+        Assert.Equal("openrouter", registry.ResolveProvider("nvidia/nemotron-3-super-120b-a12b:free").Name);
     }
 
     [Fact]
@@ -180,7 +178,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6")!.Value.Name);
+        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6").Name);
         Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"]!.Name);
     }
 
@@ -194,7 +192,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b")!.Value.Name);
+        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b").Name);
     }
 
     // ── Cross-provider collisions ───────────────────────────────────────
@@ -202,41 +200,44 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task GptOss120b_OfferedByNvidiaGroqOllama_ClaimsLowestPriority()
     {
-        // Live JSON priorities:
-        //   nvidia.json p7 (match "openai/gpt-oss-120b"), groq.json p4 (same match).
-        //   ollama.json p1 (match "gpt-oss" — its upstream id is the bare "gpt-oss-120b").
-        // So the shared upstream id "openai/gpt-oss-120b" is offered by nvidia and groq,
-        // and ollama's "gpt-oss-120b" is a separate upstream that ollama wins by default.
+        // Live JSON priorities after the 2026-06-10 curation:
+        //   nvidia.json p4 (match "openai/gpt-oss-120b", upstream "openai/gpt-oss-120b").
+        //   groq.json   p4 (match "openai/gpt-oss-120b", upstream "openai/gpt-oss-120b").
+        //   ollama.json match "gpt-oss" is DISABLED — ollama is no longer a claimant for
+        //   any "gpt-oss-120b" upstream id, so we don't even ask the fake handler for one.
+        // Tie-break: nvidia wins over groq because ProviderRegistry discovery order
+        // (deepseek, openai, nvidia, openrouter, groq, …) places nvidia before groq.
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(
                 new Dictionary<string, string[]>
                 {
                     ["nvidia"] = ["openai/gpt-oss-120b"],
                     ["groq"] = ["openai/gpt-oss-120b"],
-                    ["ollama"] = ["gpt-oss-120b"],
                 },
                 ollamaProviders: ["ollama"]);
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        // Shared upstream: groq wins (p4) over nvidia (p7).
-        Assert.Equal("groq", registry.ResolveProvider("openai/gpt-oss-120b")!.Value.Name);
-        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b"]!.Name);
+        // Shared upstream: nvidia wins (p4) over groq (p4) via provider discovery order.
+        Assert.Equal("nvidia", registry.ResolveProvider("openai/gpt-oss-120b").Name);
+        Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b"].Name);
 
         // Both claimants get qualified aliases.
         Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b@nvidia"]!.Name);
         Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b@groq"]!.Name);
 
-        // Failover: groq (p4) first, then nvidia (p7).
+        // Failover: nvidia (p4) first, then groq (p4) — same priority, registry order breaks tie.
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
             registry.ResolveCandidates("openai/gpt-oss-120b");
         Assert.Equal(2, cands.Count);
-        Assert.Equal("groq", cands[0].Provider.Name);
-        Assert.Equal("nvidia", cands[1].Provider.Name);
+        Assert.Equal("nvidia", cands[0].Provider.Name);
+        Assert.Equal("groq", cands[1].Provider.Name);
 
-        // Ollama-only "gpt-oss-120b" stays on ollama.
-        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b")!.Value.Name);
-        Assert.Equal("ollama", registry.ModelToProvider["gpt-oss-120b"]!.Name);
+        // The bare "gpt-oss-120b" (no upstream prefix) is NOT exposed by anyone:
+        //   - nvidia's upstream id is "openai/gpt-oss-120b" (not the bare name).
+        //   - groq's upstream id is the same.
+        //   - ollama's "gpt-oss" match is disabled, so ollama doesn't claim the bare id.
+        Assert.False(registry.ModelToProvider.ContainsKey("gpt-oss-120b"));
     }
 
     [Fact]
@@ -254,7 +255,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6")!.Value.Name);
+        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6").Name);
 
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
             registry.ResolveCandidates("kimi-k2.6");

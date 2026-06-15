@@ -18,9 +18,9 @@
       }
     },
     {
-      "match": "deepseek-v4-flash",
+      "match": "deepseek-coder-6.7b-instruct",
       "priority": 2,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 384000,
@@ -34,20 +34,19 @@
       }
     },
     {
-      "match": "deepseek-coder-6.7b-instruct",
+      "match": "deepseek-v4-flash",
       "priority": 3,
       "enabled": true,
       "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 8192,
+        "context_length": 1048576,
+        "max_output_tokens": 131072,
         "supports_tools": true,
         "supports_vision": false,
         "family": "deepseek",
         "temperature": 0.2,
-        "top_p": 0.95,
         "max_tokens": 4096,
-        "reasoning_effort": "low",
-        "timeout_seconds": 60
+        "reasoning_effort": "medium",
+        "timeout_seconds": 90
       }
     }
   ]

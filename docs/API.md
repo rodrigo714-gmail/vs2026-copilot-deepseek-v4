@@ -1,6 +1,6 @@
 # Multi-Provider AI Proxy - API Reference
 
-Complete API documentation for the C# multi-provider proxy supporting DeepSeek, OpenAI, NVIDIA NIM, OpenRouter, Groq, and Ollama Cloud.
+Complete API documentation for the C# multi-provider proxy supporting DeepSeek, OpenAI, NVIDIA NIM, OpenRouter, Groq, Moonshot/Kimi, Cerebras, and Ollama Cloud.
 
 ## Table of Contents
 
@@ -13,6 +13,7 @@ Complete API documentation for the C# multi-provider proxy supporting DeepSeek, 
 - [Error Handling](#error-handling)
 - [Model Resolution](#model-resolution)
 - [Reasoning Content Caching](#reasoning-content-caching)
+- [Force-Mode Parameter Override](#force-mode-parameter-override)
 
 ---
 
@@ -22,7 +23,7 @@ The proxy provides two API interfaces:
 1. **OpenAI-compatible** (`/v1/*`) — for GitHub Copilot, Cursor, Continue.dev, OpenAI SDKs
 2. **Ollama-compatible** (`/api/*`) — for Visual Studio BYOM, native Ollama clients
 
-Both interfaces route requests to the configured backend provider (DeepSeek, OpenAI, NVIDIA, OpenRouter, Groq, Ollama Cloud) based on the requested model name.
+Both interfaces route requests to the configured backend provider (DeepSeek, OpenAI, NVIDIA, OpenRouter, Groq, Moonshot/Kimi, Cerebras, Ollama Cloud) based on the requested model name.
 
 ### Base URL
 
@@ -55,18 +56,25 @@ curl http://localhost:11434/health
     "nvidia",
     "groq",
     "openrouter",
-    "ollamacloud"
+    "ollama",
+    "moonshot",
+    "cerebras"
   ],
   "availableModels": [
     "deepseek-v4-pro",
     "deepseek-v4-flash",
     "gpt-5",
-    "gpt-4o",
-    "...other models..."
+    "kimi-k2.7-code",
+    "kimi-k2.6",
+    "zai-glm-4.7",
+    "qwen3-coder:480b",
+    "... (~40 models, 5 enabled per provider, 1-2 for DeepSeek/Cerebras/Ollama)"
   ],
   "defaultModel": "deepseek-v4-pro"
 }
 ```
+
+> Providers that have no `PROVIDER_*_API_KEY` env var set are silently skipped — only the providers you configured are listed.
 
 **Status Codes:**
 - `200 OK` — Proxy is healthy and at least one provider is configured
@@ -77,7 +85,7 @@ curl http://localhost:11434/health
 
 ### GET /v1/models
 
-List available models in OpenAI format.
+List available models in OpenAI format. **Only returns routable ids** — either bare upstream ids (lowest-priority claimant wins) or fully-qualified `upstream@provider` aliases. Raw `provider/model` strings are intentionally **not** listed because the proxy's routing layer cannot accept them on POST requests.
 
 **Request:**
 ```bash
@@ -96,15 +104,26 @@ curl http://localhost:11434/v1/models
       "owned_by": "deepseek"
     },
     {
-      "id": "gpt-5",
+      "id": "kimi-k2.7-code",
       "object": "model",
       "created": 1700000000,
-      "owned_by": "openai"
+      "owned_by": "moonshot"
     },
-    "...other models..."
+    {
+      "id": "kimi-k2.6",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "moonshot"
+    },
+    "... (5 enabled per provider, ~40 total)"
   ]
 }
 ```
+
+**Notes:**
+- A bare `id` (e.g. `kimi-k2.6`) means the lowest-priority claimant provider wins. If multiple providers offer the same upstream id (e.g. NVIDIA and Groq both expose `openai/gpt-oss-120b`), NVIDIA wins by discovery order (`deepseek, openai, nvidia, openrouter, groq, ollama, moonshot, cerebras`).
+- A qualified `id` like `kimi-k2.6@moonshot` forces routing to that specific provider with no failover. Use this when you need to pin the upstream.
+- Use `POST /v1/chat/completions` with the chosen id verbatim — the proxy resolves both forms.
 
 ---
 
@@ -140,7 +159,7 @@ Authorization: Bearer {optional-api-key}  (typically not needed for proxy)
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | Model ID (e.g., `deepseek-v4-pro`, `gpt-5`, `llama-3.3-70b-versatile`) |
+| `model` | string | Yes | Model ID (e.g., `deepseek-v4-pro`, `gpt-5`, `kimi-k2.7-code`) |
 | `messages` | array | Yes | Message history with `role` (user/assistant/system) and `content` |
 | `stream` | boolean | No | Enable streaming mode (default: `false`) |
 | `temperature` | float | No | Sampling temperature (0.0–2.0, default: 0.7) |
@@ -193,7 +212,8 @@ data: [DONE]
 - When `reasoning_effort` is set, `top_p` is omitted per DeepSeek/OpenAI documentation to avoid undefined behavior.
 - `top_k` is automatically filtered for providers that do not support it: DeepSeek, OpenAI, and Moonshot/Kimi. It is preserved for NVIDIA, Groq, and OpenRouter.
 - The proxy caches `reasoning_content` from DeepSeek responses and reinjects it on subsequent assistant messages.
-- Supported providers: DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi.
+- **Moonshot Kimi K2.x force-mode:** the proxy always sets `temperature=1.0` for `kimi-k2.7-code`, `kimi-k2.6`, and `kimi-k2.5` regardless of what the client sends. These models reject any request where `temperature ≠ 1.0`. See [Force-Mode Parameter Override](#force-mode-parameter-override).
+- Supported providers: DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras.
 
 ---
 
@@ -434,13 +454,13 @@ curl -X POST http://localhost:11434/v1/chat/completions \
 curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "moonshotai/kimi-k2.6",
+    "model": "kimi-k2.7-code",
     "messages": [
       {"role": "user", "content": "summarize cloud computing"}
     ],
     "options": {
-      "temperature": 0.3,
-      "top_p": 0.8
+      "temperature": 1.0,
+      "top_p": 0.95
     },
     "stream": false
   }'
@@ -506,18 +526,75 @@ for attempt in range(3):
 
 ### How the Proxy Selects a Provider
 
-1. **Request arrives** with `model="deepseek-v4-pro"`
-2. **Proxy resolves** via `ProviderRegistry.ResolveCandidates()`
-3. **Candidate selection**:
-   - First: Check if model ID maps directly to a provider (e.g., `gpt-5` → `openai`)
-   - Second: Check NVIDIA NIM (many models available there)
-   - Third: Fallback to configured default provider
+1. **Request arrives** with `model="kimi-k2.7-code"`
+2. **Proxy resolves** via `ProviderRegistry.ResolveModel()` (3-level hint resolution, see [ARCHITECTURE.md](ARCHITECTURE.md))
+3. **Candidate selection** via `ProviderRegistry.ResolveCandidates()`:
+   - For a bare id like `kimi-k2.7-code`, return every provider that offers it, ordered by `(priority asc, provider order asc)`. Tie-breaks go to the earliest-discovered provider.
+   - For a qualified id like `kimi-k2.7-code@moonshot`, return only that one candidate (no failover).
 4. **Failover**: If the primary candidate fails (non-streaming only), try the next candidate in priority order
 5. **Response**: Forward upgraded response in provider-neutral format
 
+### 3-level `provider/model` hint resolution
+
+`ProviderRegistry.ResolveModel()` handles the OpenAI-style `provider/model` form by trying three strategies in order:
+
+1. **Verbatim** — full id exists in the registry (`nvidia/openai/gpt-oss-120b` → `openai/gpt-oss-120b`).
+2. **Strip prefix** — strip the provider prefix and look up the bare name (`groq/qwen3-32b` → `qwen3-32b`).
+3. **Suffix match within hinted provider** — find any upstream id owned by the hinted provider whose suffix equals the bare name (`nvidia/qwen3.5-397b-a17b` → NVIDIA's family-prefixed `qwen/qwen3.5-397b-a17b`). Must NOT cross providers.
+
+The third level is necessary because NVIDIA exposes many upstream ids with a `family/` prefix that isn't part of the model the user typed.
+
 ### Supported Models by Provider
 
-See [CONFIGURATION.md](CONFIGURATION.md) for complete provider/model mapping and customization.
+See [CONFIGURATION.md](CONFIGURATION.md) for the complete per-provider model roster and customization.
+
+---
+
+## Force-Mode Parameter Override
+
+Some models have hard requirements that contradict what a client might send. The proxy handles this with the `override_client_params` flag on a model's `execution` block in `config/model-selection/{provider}.json`.
+
+### When force-mode applies
+
+The `override_client_params` field on `ModelExecutionConfig` accepts a boolean. When `true`, the proxy **overwrites** client-supplied `temperature` / `top_p` / `max_tokens` / `reasoning_effort` with the configured value (instead of only injecting defaults for missing fields). When `false` or absent (default), the proxy preserves client values and only injects for missing fields.
+
+### Real-world case: Moonshot Kimi K2.x
+
+The Kimi K2.7-code, K2.6, and K2.5 models reject any request where `temperature ≠ 1.0`. The proxy addresses this with two lines in `moonshot.json`:
+
+```json
+{
+  "match": "kimi-k2.7-code",
+  "priority": 1,
+  "enabled": true,
+  "execution": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "max_tokens": 4096,
+    "override_client_params": true
+  }
+}
+```
+
+The client sends:
+```json
+{ "model": "kimi-k2.7-code", "temperature": 0.7, "messages": [...] }
+```
+
+The proxy rewrites the body before forwarding to Moonshot:
+```json
+{ "model": "kimi-k2.7-code", "temperature": 1.0, "max_tokens": 4096, "messages": [...] }
+```
+
+`RequestTransformer.ApplyExecutionDefaults()` is the function that performs this rewrite; the behaviour is exercised end-to-end by `OverrideClientParamsTests.cs` (10 tests covering both directions: force-mode overwrites, default-mode preserves).
+
+### Other models that benefit from force-mode
+
+Force-mode is currently enabled for:
+- Moonshot `kimi-k2.7-code`, `kimi-k2.6` and `kimi-k2.5` (the canonical temperature=1.0 case)
+- Ollama Cloud `kimi-k2.6` (inherits the moonshot rule — the Ollama Cloud variant of Kimi is just a passthrough to Moonshot's model)
+
+For any other model, leave `override_client_params` absent (or `false`) so the client retains control.
 
 ---
 
@@ -567,6 +644,8 @@ This enables true multi-turn reasoning without the cost of re-running reasoning 
   - `PROVIDER_OPENROUTER_API_KEY`
   - `PROVIDER_GROQ_API_KEY`
   - `PROVIDER_OLLAMACLOUD_API_KEY`
+  - `PROVIDER_MOONSHOT_API_KEY`
+  - `PROVIDER_CEREBRAS_API_KEY`
 
 - **No authentication required** for clients connecting to the proxy (suitable for trusted networks only)
 

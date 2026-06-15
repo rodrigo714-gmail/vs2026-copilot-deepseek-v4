@@ -102,8 +102,8 @@ internal sealed class ProviderBenchmarkService : BackgroundService
 
     private static async Task<BenchmarkResult> ProbeModel(ProviderInfo provider, string model, string upstreamModel, CancellationToken ct)
     {
-        bool isOllama = provider.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase);
-        string path = isOllama ? "/api/chat" : "/v1/chat/completions";
+        bool isOllama = provider.Capabilities.ApiFormat == ApiFormat.Ollama;
+        string path = provider.Capabilities.ChatPath;
 
         string requestBody = isOllama
             ? JsonSerializer.Serialize(new

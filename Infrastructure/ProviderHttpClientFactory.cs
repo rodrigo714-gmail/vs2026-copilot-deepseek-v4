@@ -33,10 +33,15 @@ internal sealed class ProviderHttpClientFactory
 
     internal HttpClient CreateProviderClient(string providerName, string baseUrl, string apiKey, HttpMessageHandler handler)
     {
+        // Normalize: HttpClient resolves a relative Uri against the *last segment*
+        // of BaseAddress, not the end of the string. "https://api.groq.com/openai"
+        // + "v1/chat/completions" would otherwise become "https://api.groq.com/v1/...".
+        string normalizedBase = baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/";
+
         HttpClient client = new(handler, disposeHandler: false)
         {
             Timeout = TimeSpan.FromMinutes(5),
-            BaseAddress = new Uri(baseUrl)
+            BaseAddress = new Uri(normalizedBase)
         };
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);

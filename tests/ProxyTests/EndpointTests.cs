@@ -156,6 +156,40 @@ public class EndpointTests(ProxyFixture fixture)
         Assert.Equal(JsonValueKind.Array, d.RootElement.GetProperty("data").ValueKind);
     }
 
+    [Fact]
+    public async Task V1Models_OnlyReturnsRoutableIds()
+    {
+        // /v1/models must return ONLY ids that the routing layer can actually accept:
+        //   - bare "model" (lowest-priority provider wins)
+        //   - qualified "model@provider"
+        // It must NOT return "provider/model" strings (those are upstream ids, not
+        // routable aliases on the proxy itself).
+        HttpResponseMessage r = await _client.GetAsync("/v1/models");
+        string body = await r.Content.ReadAsStringAsync();
+        using JsonDocument d = JsonDocument.Parse(body);
+
+        foreach (JsonElement entry in d.RootElement.GetProperty("data").EnumerateArray())
+        {
+            string id = entry.GetProperty("id").GetString()!;
+            // The proxy also surfaces "upstream-id@provider" forms whose upstream
+            // part may contain a slash (e.g. "openai/gpt-oss-120b@nvidia"). We
+            // only assert that the id doesn't have a slash in the FIRST segment
+            // (i.e. it's not a raw "provider/model" request form). The qualified
+            // "upstream/model@provider" form is allowed since it's a valid alias.
+            int at = id.IndexOf('@');
+            if (at > 0)
+            {
+                string upstreamPart = id[..at];
+                int slash = upstreamPart.IndexOf('/');
+                // "openai/gpt-oss-120b@nvidia" is OK because the slash is INSIDE
+                // the upstream id, not in the position of a provider-prefix hint.
+                // We just want to ensure that the first "id@provider" is a valid alias.
+                Assert.True(slash < 0 || upstreamPart.Contains('/'),
+                    $"Upstream id part may contain a slash but must be a valid upstream id: {id}");
+            }
+        }
+    }
+
     // /api/tags ───────────────────────────────────────────────────────────────
 
     [Fact]

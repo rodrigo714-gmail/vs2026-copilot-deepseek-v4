@@ -14,7 +14,8 @@ public class ProviderRegistryTests
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ProviderInfo result = registry.ResolveProvider(null)!.Value;
+        ProviderInfo result = registry.ResolveProvider(null);
+
 
         Assert.Equal("deepseek", result.Name);
     }
@@ -25,7 +26,8 @@ public class ProviderRegistryTests
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ProviderInfo result = registry.ResolveProvider("")!.Value;
+        ProviderInfo result = registry.ResolveProvider("");
+
 
         Assert.Equal("deepseek", result.Name);
     }
@@ -80,7 +82,7 @@ public class ProviderRegistryTests
 
         Dictionary<string, ProviderInfo> newMap = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["custom-model"] = new ProviderInfo("groq", "key", "http://localhost", new System.Net.Http.HttpClient())
+            ["custom-model"] = new ProviderInfo("groq", "key", "http://localhost", new System.Net.Http.HttpClient(), ProviderCapabilitiesRegistry.Get("groq"))
         };
         Dictionary<string, string> newUpstream = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -89,7 +91,8 @@ public class ProviderRegistryTests
 
         registry.UpdateModelMappings(newMap, newUpstream);
 
-        ProviderInfo result = registry.ResolveProvider("custom-model")!.Value;
+        ProviderInfo result = registry.ResolveProvider("custom-model");
+        
         Assert.Equal("groq", result.Name);
     }
 
