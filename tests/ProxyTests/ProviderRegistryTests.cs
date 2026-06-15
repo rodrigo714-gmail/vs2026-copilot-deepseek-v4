@@ -14,7 +14,7 @@ public class ProviderRegistryTests
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ProviderInfo result = registry.ResolveProvider(null);
+        ProviderInfo result = registry.ResolveProvider(null)!.Value;
 
         Assert.Equal("deepseek", result.Name);
     }
@@ -25,7 +25,7 @@ public class ProviderRegistryTests
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ProviderInfo result = registry.ResolveProvider("");
+        ProviderInfo result = registry.ResolveProvider("")!.Value;
 
         Assert.Equal("deepseek", result.Name);
     }
@@ -89,7 +89,7 @@ public class ProviderRegistryTests
 
         registry.UpdateModelMappings(newMap, newUpstream);
 
-        ProviderInfo result = registry.ResolveProvider("custom-model");
+        ProviderInfo result = registry.ResolveProvider("custom-model")!.Value;
         Assert.Equal("groq", result.Name);
     }
 

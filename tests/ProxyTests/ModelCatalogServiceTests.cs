@@ -121,9 +121,9 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("deepseek", registry.ResolveProvider("deepseek-v4-pro").Name);
-        Assert.Equal("deepseek", registry.ModelToProvider["deepseek-v4-pro"].Name);
-        Assert.Equal("deepseek", registry.ModelToProvider["deepseek-v4-pro@deepseek"].Name);
+        Assert.Equal("deepseek", registry.ResolveProvider("deepseek-v4-pro")!.Value.Name);
+        Assert.Equal("deepseek", registry.ModelToProvider["deepseek-v4-pro"]!.Name);
+        Assert.Equal("deepseek", registry.ModelToProvider["deepseek-v4-pro@deepseek"]!.Name);
         Assert.Contains("deepseek-v4-pro", catalog.AvailableModels);
     }
 
@@ -135,8 +135,8 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("openai", registry.ResolveProvider("gpt-5").Name);
-        Assert.Equal("openai", registry.ModelToProvider["gpt-5@openai"].Name);
+        Assert.Equal("openai", registry.ResolveProvider("gpt-5")!.Value.Name);
+        Assert.Equal("openai", registry.ModelToProvider["gpt-5@openai"]!.Name);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("nvidia", registry.ResolveProvider("nvidia/llama-3.1-nemotron-70b-instruct").Name);
+        Assert.Equal("nvidia", registry.ResolveProvider("nvidia/llama-3.1-nemotron-70b-instruct")!.Value.Name);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("groq", registry.ResolveProvider("llama-3.3-70b-versatile").Name);
+        Assert.Equal("groq", registry.ResolveProvider("llama-3.3-70b-versatile")!.Value.Name);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("openrouter", registry.ResolveProvider("nvidia/nemotron-3-super-120b-a12b:free").Name);
+        Assert.Equal("openrouter", registry.ResolveProvider("nvidia/nemotron-3-super-120b-a12b:free")!.Value.Name);
     }
 
     [Fact]
@@ -180,8 +180,8 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6").Name);
-        Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"].Name);
+        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6")!.Value.Name);
+        Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"]!.Name);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b").Name);
+        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b")!.Value.Name);
     }
 
     // ── Cross-provider collisions ───────────────────────────────────────
@@ -220,12 +220,12 @@ public class ModelCatalogServiceTests : IDisposable
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
         // Shared upstream: groq wins (p4) over nvidia (p7).
-        Assert.Equal("groq", registry.ResolveProvider("openai/gpt-oss-120b").Name);
-        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b"].Name);
+        Assert.Equal("groq", registry.ResolveProvider("openai/gpt-oss-120b")!.Value.Name);
+        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b"]!.Name);
 
         // Both claimants get qualified aliases.
-        Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b@nvidia"].Name);
-        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b@groq"].Name);
+        Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b@nvidia"]!.Name);
+        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b@groq"]!.Name);
 
         // Failover: groq (p4) first, then nvidia (p7).
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
@@ -235,8 +235,8 @@ public class ModelCatalogServiceTests : IDisposable
         Assert.Equal("nvidia", cands[1].Provider.Name);
 
         // Ollama-only "gpt-oss-120b" stays on ollama.
-        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b").Name);
-        Assert.Equal("ollama", registry.ModelToProvider["gpt-oss-120b"].Name);
+        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b")!.Value.Name);
+        Assert.Equal("ollama", registry.ModelToProvider["gpt-oss-120b"]!.Name);
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6").Name);
+        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6")!.Value.Name);
 
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
             registry.ResolveCandidates("kimi-k2.6");
@@ -262,8 +262,8 @@ public class ModelCatalogServiceTests : IDisposable
         Assert.Equal("moonshot", cands[0].Provider.Name);
         Assert.Equal("ollama", cands[1].Provider.Name);
 
-        Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"].Name);
-        Assert.Equal("ollama", registry.ModelToProvider["kimi-k2.6@ollama"].Name);
+        Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"]!.Name);
+        Assert.Equal("ollama", registry.ModelToProvider["kimi-k2.6@ollama"]!.Name);
     }
 
     // ── Exposure gate ────────────────────────────────────────────────────

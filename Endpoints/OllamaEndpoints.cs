@@ -6,7 +6,16 @@ internal static class OllamaEndpoints
 {
     internal static IEndpointRouteBuilder MapOllamaEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/version", () => Results.Json(new { version = "0.5.7" }, JsonDefaults.SnakeCase));
+        app.MapGet("/api/version", () => Results.Json(new { version = "0.13.4" }, JsonDefaults.SnakeCase));
+
+        // Dummy /api/pull — instantly returns success so Codex --oss doesn't 404.
+        // The proxy has no real models to pull; all models are remote API passthroughs.
+        app.MapPost("/api/pull", (HttpContext ctx) =>
+        {
+            ctx.Response.StatusCode = 200;
+            ctx.Response.ContentType = "application/x-ndjson";
+            return ctx.Response.WriteAsync("{\"status\":\"success\"}\n", ctx.RequestAborted);
+        });
 
         app.MapGet("/api/tags", async (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore) =>
         {
@@ -288,7 +297,14 @@ internal static class OllamaEndpoints
 
                 foreach (JsonProperty mp in msg.EnumerateObject())
                 {
-                    if (mp.NameEquals("content") && hasImages)
+                    if (mp.NameEquals("role"))
+                    {
+                        // Map Responses API / GPT-5 "developer" role → "system"
+                        // for providers that don't support it (DeepSeek, etc.)
+                        string r = mp.Value.GetString() ?? "user";
+                        writer.WriteString("role", r == "developer" ? "system" : r);
+                    }
+                    else if (mp.NameEquals("content") && hasImages)
                     {
                         string text = mp.Value.GetString() ?? "";
                         writer.WritePropertyName("content");

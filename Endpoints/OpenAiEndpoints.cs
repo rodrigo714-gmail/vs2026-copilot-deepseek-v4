@@ -77,6 +77,37 @@ internal static class OpenAiEndpoints
             }, JsonDefaults.SnakeCase);
         });
 
+        app.MapGet("/v1/models/{modelId}", (string modelId, ProviderRegistry providerRegistry, ModelCatalogService modelCatalog) =>
+        {
+            string resolvedModel = providerRegistry.ResolveModel(modelId);
+            string upstreamModel = providerRegistry.ResolveUpstreamModel(modelId);
+
+            (int contextLength, int maxOutputTokens, bool supportsTools, bool supportsVision, string[] capabilities, string family) =
+                modelCatalog.GetModelProfile(resolvedModel);
+
+            ModelExecutionConfig execConfig = modelCatalog.GetExecutionConfigForModel(resolvedModel);
+
+            providerRegistry.ModelToProvider.TryGetValue(resolvedModel, out ProviderInfo prov);
+            string ownedBy = prov.Name ?? "deepseek";
+
+            return Results.Json(new
+            {
+                id = resolvedModel,
+                @object = "model",
+                created = 1700000000,
+                owned_by = ownedBy,
+                context_length = contextLength,
+                max_output_tokens = maxOutputTokens,
+                supports_tools = supportsTools,
+                supports_vision = supportsVision,
+                capabilities = capabilities,
+                family = family,
+                upstream_model = upstreamModel,
+                max_tokens_preferred = execConfig.MaxTokensPreferred,
+                reasoning_effort = execConfig.ReasoningEffort
+            }, JsonDefaults.SnakeCase);
+        });
+
         app.MapPost("/v1/chat/completions", async (
             HttpContext ctx,
             ProviderRegistry providerRegistry,

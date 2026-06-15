@@ -40,7 +40,7 @@
       "priority": 3,
       "enabled": false,
       "execution": {
-        "context_length": 131072,
+        "context_length": 131072
         "max_output_tokens": 32768,
         "supports_tools": true,
         "supports_vision": true,
@@ -56,7 +56,7 @@
       "priority": 4,
       "enabled": false,
       "execution": {
-        "context_length": 131072,
+        "context_length": 131072
         "max_output_tokens": 32768,
         "supports_tools": true,
         "supports_vision": false,
@@ -70,7 +70,7 @@
     {
       "match": "moonshot-v1-32k",
       "priority": 5,
-      "enabled": false,
+      "enabled": false
       "execution": {
         "context_length": 32768,
         "max_output_tokens": 8192,
@@ -86,7 +86,7 @@
     {
       "match": "moonshot-v1-8k",
       "priority": 6,
-      "enabled": false,
+      "enabled": false
       "execution": {
         "context_length": 8192,
         "max_output_tokens": 4096,
