@@ -37,7 +37,7 @@ public class ModelSelectionStoreTests
 
         ModelExecutionConfig config = store.GetExecutionConfigForModel("nonexistent-model-xyz", registry.ModelToProvider);
 
-        Assert.NotNull(config);
+        Assert.False(config.OverrideClientParams);
     }
 
     [Fact]
@@ -146,61 +146,60 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Glm51_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_Qwen3Coder480B_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.1", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder:480b", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("glm-5.1", entry.Value.Match);
+        Assert.Equal("qwen3-coder:480b", entry.Value.Match);
         Assert.Equal(1, entry.Value.Priority);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Qwen3Vl_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_Devstral_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-vl:235b", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("devstral-2:123b", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("qwen3-vl:235b", entry.Value.Match);
-        Assert.True(entry.Value.Execution.SupportsVision);
+        Assert.Equal("devstral-2:123b", entry.Value.Match);
+        Assert.True(entry.Value.Execution.SupportsTools ?? false);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_MinimaxM3_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_DeepSeekV4Pro_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("minimax-m3", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("deepseek-v4-pro", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("minimax-m3", entry.Value.Match);
-        Assert.Equal(8, entry.Value.Priority);
+        Assert.Equal("deepseek-v4-pro", entry.Value.Match);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Cogito_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_KimiK26_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("cogito-2.1:671b", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.6", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("cogito-2.1:671b", entry.Value.Match);
+        Assert.Equal("kimi-k2.6", entry.Value.Match);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Glm5_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_Qwen3CoderNext_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder-next", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("glm-5", entry.Value.Match);
+        Assert.Equal("qwen3-coder-next", entry.Value.Match);
     }
 
     [Fact]
@@ -237,60 +236,63 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_Glm51_HasContextLength128K()
+    public void GetExecutionConfigForModel_OllamaCloud_Qwen3Coder480B_HasContextLength128K()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("glm-5.1", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("qwen3-coder:480b", registry.ModelToProvider);
 
         Assert.True(config.ContextLength.HasValue);
         Assert.Equal(128_000, config.ContextLength.Value);
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_NemotronSuper_HasContextLength1M()
+    public void GetExecutionConfigForModel_OllamaCloud_KimiK26_HasOverrideClientParams()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("nemotron-3-super", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("kimi-k2.6", registry.ModelToProvider);
 
-        Assert.True(config.ContextLength.HasValue);
-        Assert.Equal(1_048_576, config.ContextLength.Value);
+        // kimi-k2.6 served via Ollama Cloud inherits the moonshot override_client_params
+        // rule and must always pin temperature=1.0.
+        Assert.True(config.Temperature.HasValue);
+        Assert.Equal(1.0, config.Temperature.Value);
+        Assert.True(config.OverrideClientParams);
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_Cogito_HasReasoningTemperature()
+    public void GetExecutionConfigForModel_OllamaCloud_Devstral_HasLowTemperature()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("cogito-2.1:671b", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("devstral-2:123b", registry.ModelToProvider);
 
         Assert.True(config.Temperature.HasValue);
-        Assert.Equal(0.6, config.Temperature.Value);
+        Assert.Equal(0.2, config.Temperature.Value);
     }
 
     [Fact]
-    public void IsPreferredModel_OllamaCloud_Glm5_ReturnsTrue()
+    public void IsPreferredModel_OllamaCloud_Qwen3Coder480B_ReturnsTrue()
     {
         ModelSelectionStore store = new();
 
-        bool isPreferred = store.IsPreferredModel("glm-5", "ollama");
+        bool isPreferred = store.IsPreferredModel("qwen3-coder:480b", "ollama");
 
         Assert.True(isPreferred);
     }
 
     [Fact]
-    public void IsPreferredModel_OllamaCloud_MinimaxM3_ReturnsTrue()
+    public void IsPreferredModel_OllamaCloud_Devstral_ReturnsTrue()
     {
         ModelSelectionStore store = new();
 
-        bool isPreferred = store.IsPreferredModel("minimax-m3", "ollama");
+        bool isPreferred = store.IsPreferredModel("devstral-2:123b", "ollama");
 
         Assert.True(isPreferred);
     }
@@ -306,14 +308,14 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetPreferredModelPriority_OllamaCloud_MistralLarge3_ReturnsExpectedPriority()
+    public void GetPreferredModelPriority_OllamaCloud_KimiK26_ReturnsExpectedPriority()
     {
         ModelSelectionStore store = new();
 
-        int priority = store.GetPreferredModelPriority("mistral-large-3:675b", "ollama");
+        int priority = store.GetPreferredModelPriority("kimi-k2.6", "ollama");
 
-        // mistral-large-3:675b is priority 5 in ollamacloud.json
-        Assert.Equal(5, priority);
+        // kimi-k2.6 is priority 4 in ollamacloud.json (after the three qwen3-coder/devstral picks)
+        Assert.Equal(4, priority);
     }
 
     [Fact]
@@ -342,13 +344,13 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_DeepSeekCoder_HasReasoningEffort()
+    public void GetExecutionConfigForModel_DeepSeekFlash_HasReasoningEffort()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-coder-6.7b-instruct", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-v4-flash", registry.ModelToProvider);
 
         Assert.False(string.IsNullOrWhiteSpace(config.ReasoningEffort));
     }

@@ -23,6 +23,15 @@ internal sealed class FakeProviderHandler : DelegatingHandler
     public FakeProviderHandler(IDictionary<string, string[]> modelsByProvider, IEnumerable<string>? ollamaProviders = null)
     {
         HashSet<string> ollama = new(ollamaProviders ?? [], StringComparer.OrdinalIgnoreCase);
+        // Auto-detect Ollama-shaped providers from capabilities (in case caller didn't specify).
+        foreach (string key in modelsByProvider.Keys)
+        {
+            if (!ollama.Contains(key) && ProviderCapabilitiesRegistry.TryGet(key, out ProviderCapabilities caps)
+                && caps.ApiFormat == ApiFormat.Ollama)
+            {
+                ollama.Add(key);
+            }
+        }
         _openAiBodies = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _ollamaBodies = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (KeyValuePair<string, string[]> kv in modelsByProvider)

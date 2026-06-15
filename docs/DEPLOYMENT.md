@@ -83,6 +83,8 @@ services:
       PROVIDER_GROQ_API_KEY: ${PROVIDER_GROQ_API_KEY}
       PROVIDER_OPENROUTER_API_KEY: ${PROVIDER_OPENROUTER_API_KEY}
       PROVIDER_OLLAMACLOUD_API_KEY: ${PROVIDER_OLLAMACLOUD_API_KEY}
+      PROVIDER_MOONSHOT_API_KEY: ${PROVIDER_MOONSHOT_API_KEY}
+      PROVIDER_CEREBRAS_API_KEY: ${PROVIDER_CEREBRAS_API_KEY}
 
       PROXY_PORT: 11434
       LOG_LEVEL: Information
@@ -288,7 +290,14 @@ PROVIDER_NVIDIA_API_KEY=nvapi-...
 PROVIDER_GROQ_API_KEY=gsk-...
 PROVIDER_OPENROUTER_API_KEY=sk-or-...
 PROVIDER_OLLAMACLOUD_API_KEY=...
+PROVIDER_MOONSHOT_API_KEY=sk-...
+PROVIDER_CEREBRAS_API_KEY=csk-...
 ```
+
+> The Moonshot and Cerebras providers were added in 2026-Q2; their env-var prefix is
+> `PROVIDER_MOONSHOT_API_KEY` and `PROVIDER_CEREBRAS_API_KEY` respectively. The proxy
+> automatically discovers a provider as long as its key is set — see
+> `Services/ProviderRegistry.cs` → `DiscoverProviders()` for the order.
 
 ### Optional Variables
 
@@ -315,10 +324,20 @@ Priority order (highest to lowest):
 
 Example `.env`:
 ```bash
+# Required: at least one provider key
 PROVIDER_DEEPSEEK_API_KEY=sk-abc123def456...
 PROVIDER_OPENAI_API_KEY=sk-proj-xyz789...
+PROVIDER_NVIDIA_API_KEY=nvapi-...
+PROVIDER_GROQ_API_KEY=gsk-...
+PROVIDER_OPENROUTER_API_KEY=sk-or-...
+PROVIDER_OLLAMACLOUD_API_KEY=...
+PROVIDER_MOONSHOT_API_KEY=sk-...
+PROVIDER_CEREBRAS_API_KEY=csk-...
+
+# Optional proxy settings
 PROXY_PORT=11434
 LOG_LEVEL=Information
+DEFAULT_MODEL=deepseek-v4-pro
 ```
 
 ---
@@ -337,12 +356,16 @@ Response:
 ```json
 {
   "status": "ok",
-  "providers": ["deepseek", "openai", "nvidia"],
+  "providers": ["deepseek", "openai", "nvidia", "openrouter", "groq", "ollama", "moonshot", "cerebras"],
   "availableModels": [
     "deepseek-v4-pro",
     "deepseek-v4-flash",
     "gpt-5",
-    "llama-3.3-70b"
+    "qwen/qwen3-coder-480b-a35b-instruct",
+    "kimi-k2.6",
+    "zai-glm-4.7",
+    "qwen3-coder:480b",
+    "... (5 enabled per provider, ~40 total)"
   ],
   "defaultModel": "deepseek-v4-pro"
 }

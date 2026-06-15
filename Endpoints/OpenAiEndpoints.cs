@@ -9,57 +9,70 @@ internal static class OpenAiEndpoints
         app.MapGet("/v1/models", (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore) =>
         {
             // Build a complete list from static config files (always available) plus
-            // any models discovered via provider APIs. This ensures models from
-            // config/*.json are always listed even when a provider's API is down.
-            // Dynamic discovery is done in the background (fire-and-forget) so the
-            // response is not delayed by slow provider API calls.
+            // any models discovered from provider catalogs. The id format MUST match
+            // what ProviderRegistry.ResolveModel / ResolveCandidates can actually
+            // route: bare "model" and qualified "model@provider" (the internal
+            // mapping built by ModelCatalogService). Listing "provider/model" would
+            // not be routable on POST /v1/chat/completions.
             _ = modelCatalog.RefreshAvailableModelsIfNeeded(ctx.RequestAborted);
 
-            // Collect all enabled models from the static config files as a stable baseline.
-            // Each provider's configured match strings are the authoritative list.
             List<(string Provider, string Model)> allModels = [];
+            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-            foreach ((string providerName, ModelSelectionEntry[] entries) in modelSelectionStore.ProviderModelSelections)
+            // 1) Enumerate everything already in the live catalog (covers both bare
+            //    and qualified aliases that the routing layer actually accepts).
+            foreach (string modelId in modelCatalog.AvailableModels)
             {
-                foreach (ModelSelectionEntry entry in entries)
+                if (string.IsNullOrWhiteSpace(modelId))
+                    continue;
+
+                string providerName;
+                string displayModel;
+
+                int at = modelId.IndexOf('@');
+                if (at > 0 && at < modelId.Length - 1)
                 {
-                    if (!entry.Enabled)
-                        continue;
+                    string upstreamPart = modelId[..at];
+                    string provPart = modelId[(at + 1)..];
+                    displayModel = upstreamPart;
+                    providerName = provPart;
+                }
+                else
+                {
+                    displayModel = modelId;
+                    providerName = providerRegistry.ModelToProvider.TryGetValue(modelId, out ProviderInfo prov)
+                        ? prov.Name
+                        : "unknown";
+                }
 
-                    string model = entry.Match;
-                    // Some upstream model IDs already include the provider name prefix
-                    // (e.g. "nvidia/llama-3.1-nemotron-70b-instruct"). Avoid duplication.
-                    string displayId = model.StartsWith(providerName + "/", StringComparison.OrdinalIgnoreCase)
-                        ? model
-                        : $"{providerName}/{model}";
+                if (seen.Add(modelId))
+                {
+                    allModels.Add((providerName, modelId));
+                }
+                // Also surface the bare form when the catalog only registered the
+                // qualified one (helps clients that prefer short ids).
+                if (modelId.Contains('@'))
+                {
+                    string bare = modelId[..modelId.IndexOf('@')];
+                    if (seen.Add(bare))
+                    {
+                        allModels.Add((providerName, bare));
+                    }
+                }
+                _ = displayModel; // currently unused beyond the assignments above
+            }
 
-                    allModels.Add((providerName, displayId));
+            // 2) Add any model known by its upstream id but not present yet
+            //    (defensive: catalogs populated outside the discoverer).
+            foreach (KeyValuePair<string, ProviderInfo> kv in providerRegistry.ModelToProvider)
+            {
+                if (seen.Add(kv.Key))
+                {
+                    allModels.Add((kv.Value.Name, kv.Key));
                 }
             }
 
-            // Also include any bare models discovered from provider APIs that aren't
-            // in the static config (deduplicate by display id).
-            HashSet<string> seen = new(allModels.Select(m => m.Model), StringComparer.OrdinalIgnoreCase);
-            foreach (string discovered in modelCatalog.AvailableModels)
-            {
-                if (discovered.Contains('@'))
-                    continue; // skip qualified aliases
-
-                string providerName = providerRegistry.ModelToProvider.TryGetValue(discovered, out ProviderInfo prov)
-                    ? prov.Name
-                    : "unknown";
-
-                string displayId = discovered.StartsWith(providerName + "/", StringComparison.OrdinalIgnoreCase)
-                    ? discovered
-                    : $"{providerName}/{discovered}";
-
-                if (seen.Add(displayId))
-                {
-                    allModels.Add((providerName, displayId));
-                }
-            }
-
-            // Sort by provider name then model name.
+            // Sort by provider name then model name for stable output.
             allModels = allModels.OrderBy(m => m.Provider, StringComparer.OrdinalIgnoreCase)
                                  .ThenBy(m => m.Model, StringComparer.OrdinalIgnoreCase)
                                  .ToList();
@@ -128,7 +141,20 @@ internal static class OpenAiEndpoints
             string reqModel = root.TryGetProperty("model", out JsonElement rm) && rm.ValueKind == JsonValueKind.String
                 ? rm.GetString()! : providerRegistry.DefaultModel;
             string effectiveModel = providerRegistry.ResolveModel(reqModel);
-            IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> candidates = providerRegistry.ResolveCandidates(effectiveModel);
+            // Honour an explicit OpenAI-style "provider/model" hint so the request goes
+            // to the requested provider even when the bare model id is owned by a
+            // different one in the catalog.
+            ProviderInfo? requestedProvider = ExtractProviderHint(reqModel, providerRegistry);
+            IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> candidates;
+            if (requestedProvider is { } pinnedHint)
+            {
+                string upstream = providerRegistry.ResolveUpstreamModel(effectiveModel);
+                candidates = [(pinnedHint, upstream)];
+            }
+            else
+            {
+                candidates = providerRegistry.ResolveCandidates(effectiveModel);
+            }
 
             string? modifiedRequest = requestTransformer.ModifyRequest(doc);
 
@@ -150,9 +176,9 @@ internal static class OpenAiEndpoints
                         // The raw body may carry a BYOM tag suffix (e.g. ":latest") that
                         // upstream providers don't understand.
                         candidateBody = requestTransformer.ReplaceModelInRequestBody(candidateBody, candidateUpstream);
-                        candidateBody = requestTransformer.ApplyExecutionDefaults(candidateBody, effectiveModel, candidateProvider.Name);
+                        candidateBody = requestTransformer.ApplyExecutionDefaults(candidateBody, effectiveModel, candidateProvider.Capabilities);
 
-                        if (candidateProvider.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+                        if (candidateProvider.Capabilities.ApiFormat == ApiFormat.Ollama)
                         {
                             bool handled = await TryHandleOllamaCloudChatCompletion(
                                 ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, requestCt, ct);
@@ -163,7 +189,7 @@ internal static class OpenAiEndpoints
 
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
                         HttpResponseMessage response = await candidateProvider.Client.SendAsync(
-                            new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = content },
+                            new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
                             requestCt);
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
@@ -204,9 +230,9 @@ internal static class OpenAiEndpoints
             // The raw body may carry a BYOM tag suffix (e.g. ":latest") that
             // upstream providers don't understand.
             bodyText = requestTransformer.ReplaceModelInRequestBody(bodyText, upstreamModel);
-            bodyText = requestTransformer.ApplyExecutionDefaults(bodyText, effectiveModel, provider.Name);
+            bodyText = requestTransformer.ApplyExecutionDefaults(bodyText, effectiveModel, provider.Capabilities);
 
-            if (provider.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+            if (provider.Capabilities.ApiFormat == ApiFormat.Ollama)
             {
                 await HandleOllamaCloudChatCompletion(ctx, provider, bodyText, effectiveModel, upstreamModel, isStream, requestCt, ct);
                 return;
@@ -218,7 +244,7 @@ internal static class OpenAiEndpoints
             ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
             using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
-            using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "/v1/chat/completions")
+            using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath)
             {
                 Content = reqContent
             };
@@ -243,6 +269,30 @@ internal static class OpenAiEndpoints
     }
 
     /// <summary>
+    /// Resolves an explicit "provider/model" hint from the request id to a
+    /// <see cref="ProviderInfo"/>. Returns null when the hint is absent, ambiguous,
+    /// or points at a provider the registry does not know about.
+    /// </summary>
+    private static ProviderInfo? ExtractProviderHint(string? requestedModel, ProviderRegistry providerRegistry)
+    {
+        if (string.IsNullOrWhiteSpace(requestedModel))
+            return null;
+
+        int slash = requestedModel.IndexOf('/');
+        if (slash <= 0 || slash >= requestedModel.Length - 1)
+            return null;
+
+        string providerHint = requestedModel[..slash];
+        foreach (ProviderInfo prov in providerRegistry.Providers)
+        {
+            if (string.Equals(prov.Name, providerHint, StringComparison.OrdinalIgnoreCase))
+                return prov;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Attempts an Ollama Cloud chat completion as part of failover.
     /// Returns true if the response was written to the client; false if the candidate failed and the caller should try the next one.
     /// </summary>
@@ -259,7 +309,7 @@ internal static class OpenAiEndpoints
 
         using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, "/api/chat") { Content = content },
+            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content },
             requestCt);
 
         string respBody = await response.Content.ReadAsStringAsync(clientCt);
@@ -287,7 +337,7 @@ internal static class OpenAiEndpoints
 
         using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, "/api/chat") { Content = content },
+            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content },
             requestCt);
 
         string respBody = await response.Content.ReadAsStringAsync(clientCt);

@@ -11,10 +11,6 @@ namespace ProxyTests;
 [Collection("Proxy")]
 public class ParameterValidationTests
 {
-    /// <summary>
-    /// Creates a RequestTransformer with the current real environment variables.
-    /// No snapshot or restore is needed since these are purely offline tests.
-    /// </summary>
     private static RequestTransformer CreateTransformer()
     {
         ProviderHttpClientFactory httpClientFactory = new();
@@ -25,28 +21,35 @@ public class ParameterValidationTests
         return new(modelCatalog, cache);
     }
 
-    private static JsonElement Transform(RequestTransformer sut, string model, string provider = "")
+    private static ProviderCapabilities ResolveCaps(string providerName)
+    {
+        if (string.IsNullOrEmpty(providerName))
+            return default;
+        if (providerName.Equals("ollamacloud", StringComparison.OrdinalIgnoreCase))
+            return ProviderCapabilitiesRegistry.Get("ollama");
+        return ProviderCapabilitiesRegistry.TryGet(providerName, out ProviderCapabilities caps)
+            ? caps
+            : default;
+    }
+
+    private static JsonElement Transform(RequestTransformer sut, string model, string providerName = "")
     {
         string raw    = """{"model":"x","messages":[{"role":"user","content":"hi"}]}""";
-        string result = sut.ApplyExecutionDefaults(raw, model, provider);
+        string result = sut.ApplyExecutionDefaults(raw, model, ResolveCaps(providerName));
         return JsonDocument.Parse(result).RootElement;
     }
 
-    private static JsonElement TransformWithBody(RequestTransformer sut, string body, string model, string provider = "")
+    private static JsonElement TransformWithBody(RequestTransformer sut, string body, string model, string providerName = "")
     {
-        string result = sut.ApplyExecutionDefaults(body, model, provider);
+        string result = sut.ApplyExecutionDefaults(body, model, ResolveCaps(providerName));
         return JsonDocument.Parse(result).RootElement;
     }
 
-    // ──────────────────────────────────────────────
-    // DeepSeek — 3 modelos: v4-pro, v4-flash, coder
-    //   v4-pro / v4-flash: reasoning_effort, NO top_p
-    //   coder: temperature, top_p, NO reasoning_effort
-    // ──────────────────────────────────────────────
+    // ─── DeepSeek: v4-pro + v4-flash enabled (coder-6.7b disabled) ──────────
 
     [Theory]
-    [InlineData("deepseek-v4-pro",              "deepseek", true,  false)]
-    [InlineData("deepseek-v4-flash",            "deepseek", true,  false)]
+    [InlineData("deepseek-v4-pro",   "deepseek", true,  false)]
+    [InlineData("deepseek-v4-flash", "deepseek", true,  false)]
     public void DeepSeek_ReasoningEffortPresenceMatchesModel(
         string model, string provider, bool expectReasoningEffort, bool expectTopP)
     {
@@ -82,21 +85,15 @@ public class ParameterValidationTests
             $"{model}: max_tokens must be a positive integer");
     }
 
-    // ──────────────────────────────────────────────
-    // NVIDIA NIM — 6 modelos habilitados
-    //   Ninguno soporta reasoning_effort
-    // ──────────────────────────────────────────────
+    // ─── NVIDIA NIM ──────────────────────────────────────────────────────
 
     public static TheoryData<string> NvidiaModels =>
     [
-        "deepseek-ai/deepseek-v4-pro",
         "qwen/qwen3-coder-480b-a35b-instruct",
-        "qwen/qwen3.5-397b-a17b",
-        "nvidia/nemotron-3-ultra-550b-a55b",
+        "moonshotai/kimi-k2.6",
         "nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/llama-3.1-nemotron-70b-instruct",
         "openai/gpt-oss-120b",
-        "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+        "qwen/qwen3.5-397b-a17b"
     ];
 
     [Theory]
@@ -123,11 +120,7 @@ public class ParameterValidationTests
             $"NVIDIA/{model}: max_tokens must be positive");
     }
 
-    // ──────────────────────────────────────────────
-    // OpenAI — 4 modelos
-    //   gpt-5 / gpt-5-mini: reasoning_effort, NO top_p
-    //   gpt-4.1 / gpt-4o: top_p, NO reasoning_effort
-    // ──────────────────────────────────────────────
+    // ─── OpenAI ──────────────────────────────────────────────────────────
 
     [Theory]
     [InlineData("gpt-5")]
@@ -152,9 +145,8 @@ public class ParameterValidationTests
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "openai");
-
         Assert.True(result.TryGetProperty("reasoning_effort", out _),
-            $"OpenAI/{model}: reasoning_effort should be injected (supported by OpenAI API)");
+            $"OpenAI/{model}: reasoning_effort should be injected");
     }
 
     [Theory]
@@ -164,9 +156,8 @@ public class ParameterValidationTests
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "openai");
-
         Assert.False(result.TryGetProperty("reasoning_effort", out _),
-            $"OpenAI/{model}: reasoning_effort must NOT be injected (not a reasoning model)");
+            $"OpenAI/{model}: reasoning_effort must NOT be injected");
     }
 
     [Theory]
@@ -185,10 +176,7 @@ public class ParameterValidationTests
                 $"OpenAI/{model}: top_p must NOT be sent when reasoning_effort is active");
     }
 
-    // ──────────────────────────────────────────────
-    // Groq — 2 modelos habilitados
-    //   Ninguno soporta reasoning_effort
-    // ──────────────────────────────────────────────
+    // ─── Groq ────────────────────────────────────────────────────────────
 
     [Theory]
     [InlineData("llama-3.3-70b-versatile")]
@@ -199,7 +187,6 @@ public class ParameterValidationTests
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "groq");
-
         Assert.False(result.TryGetProperty("reasoning_effort", out _),
             $"Groq/{model}: reasoning_effort must NOT be sent (not supported by Groq API)");
     }
@@ -213,26 +200,22 @@ public class ParameterValidationTests
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "groq");
-
         Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
             $"Groq/{model}: max_tokens should be injected from config");
         Assert.True(maxTok.GetInt32() > 0,
             $"Groq/{model}: max_tokens must be positive");
     }
 
-    // ──────────────────────────────────────────────
-    // Ollama Cloud — 2 modelos habilitados
-    //   Ninguno soporta reasoning_effort
-    // ──────────────────────────────────────────────
+    // ─── Ollama Cloud ────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("gemma4:31b")]
-    [InlineData("nemotron-3-super")]
+    [InlineData("qwen3-coder:480b")]
+    [InlineData("devstral-2:123b")]
+    [InlineData("kimi-k2.6")]
     public void OllamaCloud_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "ollamacloud");
-
         Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
             $"OllamaCloud/{model}: max_tokens should be injected from config");
         Assert.True(maxTok.GetInt32() > 0,
@@ -240,51 +223,43 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("gemma4:31b")]
-    [InlineData("nemotron-3-super")]
+    [InlineData("qwen3-coder:480b")]
+    [InlineData("devstral-2:123b")]
+    [InlineData("kimi-k2.6")]
     public void OllamaCloud_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "ollamacloud");
-
         Assert.False(result.TryGetProperty("reasoning_effort", out _),
-            $"OllamaCloud/{model}: reasoning_effort must NOT be sent (not supported by Ollama Cloud API)");
+            $"OllamaCloud/{model}: reasoning_effort must NOT be sent");
     }
 
-    // ──────────────────────────────────────────────
-    // OpenRouter — 2 modelos free habilitados
-    //   No inyecta reasoning_effort (passthrough)
-    // ──────────────────────────────────────────────
+    // ─── OpenRouter ──────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("nvidia/nemotron-3-super-120b-a12b:free")]
-    [InlineData("qwen/qwen3-coder:free")]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b")]
+    [InlineData("qwen/qwen3-coder")]
     public void OpenRouter_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "openrouter");
-
         Assert.False(result.TryGetProperty("reasoning_effort", out _),
             $"OpenRouter/{model}: reasoning_effort must NOT be sent");
     }
 
-    // ──────────────────────────────────────────────
-    // Moonshot / Kimi — 5 modelos habilitados
-    //   Ninguno soporta reasoning_effort
-    //   kimi-k2.6, moonshot-v1-128k/auto/32k/8k
-    // ──────────────────────────────────────────────
+    // ─── Moonshot / Kimi ────────────────────────────────────────────────
 
     [Theory]
+    [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
-    [InlineData("moonshot-v1-8k")]
     public void Moonshot_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "moonshot");
-
         Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
             $"Moonshot/{model}: max_tokens should be injected from config");
         Assert.True(maxTok.GetInt32() > 0,
@@ -292,28 +267,29 @@ public class ParameterValidationTests
     }
 
     [Theory]
+    [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
-    [InlineData("moonshot-v1-8k")]
     public void Moonshot_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "moonshot");
-
         Assert.False(result.TryGetProperty("reasoning_effort", out _),
-            $"Moonshot/{model}: reasoning_effort must NOT be sent (not supported by Moonshot/Kimi API)");
+            $"Moonshot/{model}: reasoning_effort must NOT be sent");
     }
 
     [Theory]
+    [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     public void Moonshot_Models_TemperatureInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "moonshot");
-
         Assert.True(result.TryGetProperty("temperature", out JsonElement temp),
             $"Moonshot/{model}: temperature should be injected from config");
         Assert.True(temp.GetDouble() > 0,
@@ -321,30 +297,28 @@ public class ParameterValidationTests
     }
 
     [Theory]
+    [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
-    [InlineData("moonshot-v1-8k")]
+    [InlineData("moonshot-v1-32k")]
     public void Moonshot_Models_TopPInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "moonshot");
-
         Assert.True(result.TryGetProperty("top_p", out JsonElement topP),
             $"Moonshot/{model}: top_p should be injected from config");
         Assert.True(topP.GetDouble() > 0,
             $"Moonshot/{model}: top_p must be a positive value");
     }
 
-    // ──────────────────────────────────────────────
-    // top_k filtering
-    //   Filtered (NO soportan): DeepSeek, OpenAI, Moonshot
-    //   Preserved (SÍ soportan): NVIDIA, Groq, OpenRouter
-    // ──────────────────────────────────────────────
+    // ─── top_k filtering ────────────────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
-    [InlineData("gpt-5",             "openai")]
     [InlineData("deepseek-v4-flash", "deepseek")]
+    [InlineData("gpt-5",             "openai")]
+    [InlineData("kimi-k2.7-code",    "moonshot")]
     [InlineData("kimi-k2.6",         "moonshot")]
     public void TopK_IsFiltered_ForNonSupportingProviders(string model, string provider)
     {
@@ -371,16 +345,14 @@ public class ParameterValidationTests
         Assert.Equal(50, topK.GetInt32());
     }
 
-    // ──────────────────────────────────────────────
-    // Client-supplied values are never overridden
-    // ──────────────────────────────────────────────
+    // ─── Client-supplied values ─────────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("deepseek-v4-flash", "deepseek")]
     [InlineData("gpt-5",             "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
-    [InlineData("kimi-k2.6",         "moonshot")]
+    [InlineData("moonshot-v1-128k",  "moonshot")]
     public void ClientSupplied_MaxTokens_IsNotOverridden(string model, string provider)
     {
         RequestTransformer sut = CreateTransformer();
@@ -409,7 +381,7 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
     [InlineData("llama-3.3-70b-versatile",        "groq")]
-    [InlineData("kimi-k2.6",                      "moonshot")]
+    [InlineData("moonshot-v1-128k",              "moonshot")]
     public void ClientSupplied_Temperature_IsNotOverridden(string model, string provider)
     {
         RequestTransformer sut = CreateTransformer();
@@ -435,37 +407,38 @@ public class ParameterValidationTests
         Assert.Equal(42, topK.GetInt32());
     }
 
-    // ──────────────────────────────────────────────
-    // Context-window config completeness
-    //   Verifica que TODOS los modelos habilitados
-    //   tengan context_length y max_output_tokens
-    // ──────────────────────────────────────────────
+    // ─── Context-window config completeness ─────────────────────────────
 
     [Theory]
-    // DeepSeek (2 enabled)
     [InlineData("deepseek-v4-pro",              1_048_576, 384_000)]
     [InlineData("deepseek-v4-flash",            1_048_576, 131_072)]
-    // NVIDIA NIM (6)
-    [InlineData("deepseek-ai/deepseek-v4-pro",  1_048_576, 384_000)]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
-    [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
+    [InlineData("moonshotai/kimi-k2.6",          262_144, 262_144)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
-    [InlineData("openai/gpt-oss-120b",             131_072, 16_384)]
-    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", 131_072, 16_384)]
-    // OpenAI (4)
+    [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
     [InlineData("gpt-5",      400_000, 128_000)]
     [InlineData("gpt-5-mini", 400_000, 128_000)]
     [InlineData("gpt-4.1",  1_048_576,  32_768)]
     [InlineData("gpt-4o",     128_000,   8_192)]
-    // Groq (2)
     [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
     [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
-    // Moonshot/Kimi (5)
-    [InlineData("kimi-k2.6",          262_144, 262_144)]
-    [InlineData("moonshot-v1-128k",   128_000,  32_768)]
-    [InlineData("moonshot-v1-auto",   128_000,  32_768)]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
+    [InlineData("openai/gpt-oss-20b",         131_072, 65_536)]
+    [InlineData("kimi-k2.7-code",            262_144, 262_144)]
+    [InlineData("kimi-k2.5",          262_144, 262_144)]
+    [InlineData("moonshot-v1-128k",   131_072,  32_768)]
+    [InlineData("moonshot-v1-auto",   131_072,  32_768)]
     [InlineData("moonshot-v1-32k",     32_768,   8_192)]
-    [InlineData("moonshot-v1-8k",       8_192,   4_096)]
+    [InlineData("qwen/qwen3-coder",                  1_048_576, 262_000)]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000,  16_384)]
+    [InlineData("nvidia/nemotron-3-ultra-550b-a55b", 1_000_000, 262_144)]
+    [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
+    [InlineData("zai-glm-4.7",  128_000, 32_768)]
+    [InlineData("gpt-oss-120b", 131_072, 65_536)]
+    [InlineData("qwen3-coder:480b",  128_000, 32_768)]
+    [InlineData("qwen3-coder-next",  128_000, 32_768)]
+    [InlineData("devstral-2:123b",   128_000, 32_768)]
+    [InlineData("kimi-k2.6",         262_144, 262_144)]
     public void AllModels_HaveCorrectContextWindowConfig(
         string model, int expectedContextLength, int minMaxOutput)
     {
@@ -485,11 +458,7 @@ public class ParameterValidationTests
         }
     }
 
-    // ──────────────────────────────────────────────
-    // DeepSeek reasoning_effort value is valid
-    //   API docs: "high" y "max"; proxy usa "low"/"medium"
-    //   mapeados a "high" y "xhigh" a "max"
-    // ──────────────────────────────────────────────
+    // ─── reasoning_effort validity ──────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro")]
@@ -506,31 +475,38 @@ public class ParameterValidationTests
         Assert.Contains(exec.ReasoningEffort, valid);
     }
 
-    // ──────────────────────────────────────────────
-    // Temperature sanity bounds [0.0, 2.0]
-    // ──────────────────────────────────────────────
+    // ─── Temperature sanity bounds ──────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("deepseek-v4-flash", "deepseek")]
-    [InlineData("deepseek-ai/deepseek-v4-pro",  "nvidia")]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", "nvidia")]
-    [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
+    [InlineData("moonshotai/kimi-k2.6", "nvidia")]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", "nvidia")]
     [InlineData("openai/gpt-oss-120b",           "nvidia")]
-    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia")]
+    [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
     [InlineData("gpt-5",        "openai")]
     [InlineData("gpt-5-mini",   "openai")]
     [InlineData("gpt-4.1",      "openai")]
     [InlineData("gpt-4o",       "openai")]
+    [InlineData("gpt-oss-120b", "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
     [InlineData("qwen/qwen3-32b",           "groq")]
-    [InlineData("nvidia/nemotron-3-super-120b-a12b:free", "openrouter")]
-    [InlineData("qwen/qwen3-coder:free",    "openrouter")]
+    [InlineData("openai/gpt-oss-120b",      "groq")]
+    [InlineData("openai/gpt-oss-20b",       "groq")]
+    [InlineData("qwen/qwen3-coder", "openrouter")]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b", "openrouter")]
+    [InlineData("moonshotai/kimi-k2.6",  "openrouter")]
+    [InlineData("deepseek/deepseek-v4-pro", "openrouter")]
+    [InlineData("kimi-k2.7-code", "moonshot")]
     [InlineData("kimi-k2.6",    "moonshot")]
+    [InlineData("kimi-k2.5",    "moonshot")]
     [InlineData("moonshot-v1-128k", "moonshot")]
     [InlineData("moonshot-v1-32k",  "moonshot")]
-    [InlineData("moonshot-v1-8k",   "moonshot")]
+    [InlineData("zai-glm-4.7", "cerebras")]
+    [InlineData("gpt-oss-120b", "cerebras")]
+    [InlineData("qwen3-coder:480b", "ollamacloud")]
+    [InlineData("devstral-2:123b",  "ollamacloud")]
     public void ConfiguredTemperature_IsWithinValidRange(string model, string provider)
     {
         _ = provider;
@@ -544,9 +520,7 @@ public class ParameterValidationTests
             $"{model}: temperature {t} is outside [0, 2.0]");
     }
 
-    // ──────────────────────────────────────────────
-    // All provider config files exist and have models
-    // ──────────────────────────────────────────────
+    // ─── File existence ─────────────────────────────────────────────────
 
     [Fact]
     public void AllProviderConfigFiles_HaveAtLeastOneModel()
@@ -566,19 +540,18 @@ public class ParameterValidationTests
         }
     }
 
-    // ──────────────────────────────────────────────
-    // Enabled model count per provider
-    //   Verifica que los modelos correctos están enabled
-    // ──────────────────────────────────────────────
+    // ─── Enabled model count per provider ───────────────────────────────
 
     [Theory]
-    [InlineData("deepseek", 3)]
-    [InlineData("openai", 4)]
-    [InlineData("nvidia", 8)]
-    [InlineData("groq", 4)]
-    [InlineData("openrouter", 2)]
-    [InlineData("moonshot", 5)]
-    [InlineData("ollamacloud", 10)]
+    [InlineData("deepseek", 2)]      // v4-pro + v4-flash (coder-6.7b disabled)
+    [InlineData("openai", 5)]        // gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b
+    [InlineData("nvidia", 5)]
+    [InlineData("groq", 5)]
+    [InlineData("openrouter", 7)]     // qwen3.7-plus, qwen3-coder, nemotron-super, nemotron-ultra, kimi-k2.7-code, deepseek-v4-pro, kimi-k2.6
+    [InlineData("moonshot", 6)]      // kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1-128k, moonshot-v1-auto, moonshot-v1-32k
+    [InlineData("cerebras", 2)]
+    [InlineData("ollama", 8)]        // 7 ollamacloud + 1 ollama.json (mistral)
+    [InlineData("ollamacloud", 10)]  // 7 enabled + disabled
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {
         ModelSelectionStore store = new();

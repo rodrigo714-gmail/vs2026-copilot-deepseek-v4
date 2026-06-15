@@ -80,7 +80,8 @@ public class ModelSelectionTests
                             TopP: execE.TryGetProperty("top_p", out JsonElement topPE) && topPE.ValueKind == JsonValueKind.Number ? topPE.GetDouble() : null,
                             MaxTokensPreferred: execE.TryGetProperty("max_tokens", out JsonElement maxTokE) && maxTokE.ValueKind == JsonValueKind.Number ? maxTokE.GetInt32() : null,
                             ReasoningEffort: execE.TryGetProperty("reasoning_effort", out JsonElement reE) && reE.ValueKind == JsonValueKind.String ? reE.GetString() : null,
-                            TimeoutSeconds: execE.TryGetProperty("timeout_seconds", out JsonElement timeoutE) && timeoutE.ValueKind == JsonValueKind.Number ? timeoutE.GetInt32() : null
+                            TimeoutSeconds: execE.TryGetProperty("timeout_seconds", out JsonElement timeoutE) && timeoutE.ValueKind == JsonValueKind.Number ? timeoutE.GetInt32() : null,
+                            OverrideClientParams: execE.TryGetProperty("override_client_params", out JsonElement ovE) && ovE.ValueKind is JsonValueKind.True or JsonValueKind.False && ovE.GetBoolean()
                         );
                     }
 
@@ -311,21 +312,22 @@ public class ModelSelectionTests
     }
 
     [Fact]
-    public void NvidiaJson_DeepSeekEntriesHaveHighPriority()
+    public void NvidiaJson_CodingModelsHaveHighestPriority()
     {
         string configPath = FindConfigPath("nvidia.json");
         if (!File.Exists(configPath))
             return;
 
         var selections = LoadFromDir(Path.GetDirectoryName(configPath)!);
-        ModelSelectionEntry[] entries = selections["nvidia"];
-        int[] deepseekPriorities = entries
-            .Where(e => e.Match.Contains("deepseek", StringComparison.OrdinalIgnoreCase))
-            .Select(e => e.Priority)
-            .ToArray();
 
-        Assert.NotEmpty(deepseekPriorities);
-        Assert.All(deepseekPriorities, p => Assert.True(p <= 3, $"DeepSeek priority {p} should be <= 3"));
+        Assert.True(selections.ContainsKey("nvidia"));
+        // The first three enabled entries are the curated coding-first picks:
+        // qwen3-coder-480b, kimi-k2.6, nemotron-3-super-120b.
+        ModelSelectionEntry[] enabled = selections["nvidia"].Where(e => e.Enabled).ToArray();
+        Assert.True(enabled.Length >= 3, $"Expected >= 3 enabled NVIDIA models, got {enabled.Length}");
+        Assert.Contains(enabled, e => e.Match == "qwen/qwen3-coder-480b-a35b-instruct");
+        Assert.Contains(enabled, e => e.Match == "moonshotai/kimi-k2.6");
+        Assert.Contains(enabled, e => e.Match == "nvidia/nemotron-3-super-120b-a12b");
     }
 
     [Fact]

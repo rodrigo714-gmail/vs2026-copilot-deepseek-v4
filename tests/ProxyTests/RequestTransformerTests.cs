@@ -140,7 +140,7 @@ public class RequestTransformerTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[]}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "deepseek");
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("deepseek"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
@@ -153,7 +153,7 @@ public class RequestTransformerTests
         string raw = """{"messages":[]}""";
 
         // deepseek-v4-pro has reasoning_effort configured, so it's a native reasoner
-        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "deepseek");
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("deepseek"));
 
         // top_p should NOT be injected for native reasoners
         using JsonDocument doc = JsonDocument.Parse(result);
@@ -166,7 +166,7 @@ public class RequestTransformerTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"top_k":40}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "deepseek");
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("deepseek"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.TryGetProperty("top_k", out _));
@@ -178,7 +178,7 @@ public class RequestTransformerTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"top_k":40}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "some-model", "nvidia");
+        string result = sut.ApplyExecutionDefaults(raw, "some-model", ProviderCapabilitiesRegistry.Get("nvidia"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.TryGetProperty("top_k", out JsonElement topK));
@@ -191,7 +191,7 @@ public class RequestTransformerTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[]}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "groq");
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("groq"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));
@@ -216,7 +216,7 @@ public class RequestTransformerTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[]}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "openai");
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("openai"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
@@ -418,26 +418,14 @@ public class RequestTransformerTests
     }
 
     [Fact]
-    public void ApplyExecutionDefaults_InjectReasoningEffortForUnknownProviderWithReasoningModel()
+    public void ApplyExecutionDefaults_DoesNotInjectReasoningEffortForUnknownProvider()
     {
+        // With capabilities, unknown providers have all feature flags set to false.
+        // No reasoning_effort is injected regardless of model name.
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[]}""";
 
-        // Unknown provider + model containing "deepseek" should support reasoning_effort
-        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "unknown");
-
-        using JsonDocument doc = JsonDocument.Parse(result);
-        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
-    }
-
-    [Fact]
-    public void ApplyExecutionDefaults_DoesNotInjectReasoningEffortForUnknownProviderWithNonReasoningModel()
-    {
-        RequestTransformer sut = CreateTransformer();
-        string raw = """{"messages":[]}""";
-
-        // Unknown provider + non-reasoning model should NOT support reasoning_effort
-        string result = sut.ApplyExecutionDefaults(raw, "llama-3.1", "unknown");
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", default);
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));

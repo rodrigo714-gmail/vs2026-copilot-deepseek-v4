@@ -31,7 +31,7 @@ internal static class OllamaEndpoints
                 providerRegistry.Providers.Select(p => p.Name),
                 StringComparer.OrdinalIgnoreCase);
 
-            List<(string Model, int Priority)> configuredEnabled = [];
+            List<(string Provider, string Model, int Priority)> configuredEnabled = [];
             foreach ((string providerName, ModelSelectionEntry[] entries) in modelSelectionStore.ProviderModelSelections)
             {
                 if (!activeProviders.Contains(providerName))
@@ -42,27 +42,55 @@ internal static class OllamaEndpoints
                     if (!entry.Enabled)
                         continue;
 
-                    configuredEnabled.Add((entry.Match, entry.Priority));
+                    configuredEnabled.Add((providerName, entry.Match, entry.Priority));
                 }
             }
 
-            // Distinct by model id and keep deterministic ordering by priority, then name.
-            string[] models = configuredEnabled
-                .OrderBy(x => x.Priority)
-                .ThenBy(x => x.Model, StringComparer.OrdinalIgnoreCase)
-                .Select(x => x.Model)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            static string NormalizeModelForDisplay(string model)
+            {
+                string clean = model.Trim();
+                int slash = clean.IndexOf('/');
+                if (slash > 0 && slash < clean.Length - 1)
+                    clean = clean[(slash + 1)..];
+
+                return clean;
+            }
+
+            // Group by provider + normalized display model to reduce duplicate aliases such as
+            // "kimi-k2.6" and "moonshotai/kimi-k2.6" in the same provider slot.
+            // For each group, keep the best entry by priority and then by readability (prefer non-prefixed ids).
+            var curated = configuredEnabled
+                .Select(x => new
+                {
+                    x.Provider,
+                    x.Model,
+                    x.Priority,
+                    DisplayModel = NormalizeModelForDisplay(x.Model)
+                })
+                .GroupBy(x => $"{x.Provider.ToLowerInvariant()}::{x.DisplayModel.ToLowerInvariant()}")
+                .Select(g => g
+                    .OrderBy(x => x.Priority)
+                    .ThenBy(x => x.Model.Contains('/') ? 1 : 0)
+                    .ThenBy(x => x.Model.Length)
+                    .First())
+                .OrderBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.Priority)
+                .ThenBy(x => x.DisplayModel, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             return Results.Json(new
             {
-                models = models.Select(m =>
+                models = curated.Select(x =>
                 {
-                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(m);
+                    string providerPrefix = x.Provider.ToUpperInvariant();
+                    string displayName = $"{providerPrefix} - {x.DisplayModel}";
+                    string routedModel = x.Model;
+
+                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(routedModel);
                     return new
                     {
-                        name = m + ":latest",
-                        model = m + ":latest",
+                        name = displayName + ":latest",
+                        model = routedModel + ":latest",
                         modified_at = DateTime.UtcNow.ToString("o"),
                         size = 3_826_793_677L,
                         digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -114,7 +142,7 @@ internal static class OllamaEndpoints
             return Results.Json(ollamaResponseBuilder.BuildOllamaShowResponse(resolved), JsonDefaults.SnakeCase);
         });
 
-        app.MapPost("/api/chat", async (
+        app.MapPost("api/chat", async (
             HttpContext ctx,
             ProviderRegistry providerRegistry,
             ModelCatalogService modelCatalog,
@@ -134,14 +162,14 @@ internal static class OllamaEndpoints
                 ? om.GetString()! : providerRegistry.DefaultModel;
             string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
             string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
-            ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel) ?? throw new InvalidOperationException("No providers configured");
+            ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
             ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
 
             using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(ollamaEffectiveModel, ct);
             CancellationToken ollamaCt = ollamaTimeoutCts?.Token ?? ct;
 
             // ── Ollama Cloud / Native Ollama passthrough ──────────────────
-            if (ollamaProvider.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+            if (ollamaProvider.Capabilities.ApiFormat == ApiFormat.Ollama)
             {
                 string upstreamBody = ReplaceModelInOllamaRequestBody(body, ollamaUpstreamModel);
 
@@ -149,7 +177,7 @@ internal static class OllamaEndpoints
                 {
                     using StringContent ollamaContent = new(upstreamBody, Encoding.UTF8, "application/json");
                     using HttpResponseMessage ollamaResp = await ollamaProvider.Client.SendAsync(
-                        new HttpRequestMessage(HttpMethod.Post, "/api/chat") { Content = ollamaContent }, ollamaCt);
+                        new HttpRequestMessage(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = ollamaContent }, ollamaCt);
                     string ollamaRespBody = await ollamaResp.Content.ReadAsStringAsync(ct);
                     // Fallback: copy `thinking` into `content` for reasoning models that leave content empty.
                     ollamaRespBody = EnsureOllamaContentFromThinking(ollamaRespBody);
@@ -164,7 +192,7 @@ internal static class OllamaEndpoints
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
                 using StringContent ollamaStreamContent = new(upstreamBody, Encoding.UTF8, "application/json");
-                using HttpRequestMessage ollamaStreamReq = new(HttpMethod.Post, "/api/chat") { Content = ollamaStreamContent };
+                using HttpRequestMessage ollamaStreamReq = new(HttpMethod.Post, "api/chat") { Content = ollamaStreamContent };
                 using HttpResponseMessage ollamaStreamResp = await ollamaProvider.Client.SendAsync(
                     ollamaStreamReq, HttpCompletionOption.ResponseHeadersRead, ollamaCt);
 
@@ -196,14 +224,14 @@ internal static class OllamaEndpoints
             }
 
             // Apply execution defaults with provider-aware parameter filtering
-            openAiBody = requestTransformer.ApplyExecutionDefaults(openAiBody, ollamaEffectiveModel, ollamaProvider.Name);
+            openAiBody = requestTransformer.ApplyExecutionDefaults(openAiBody, ollamaEffectiveModel, ollamaProvider.Capabilities);
 
             using StringContent reqContent = new(openAiBody, Encoding.UTF8, "application/json");
 
             if (!isStream)
             {
                 using HttpResponseMessage resp = await ollamaProvider.Client.SendAsync(
-                    new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = reqContent }, ollamaCt);
+                    new HttpRequestMessage(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = reqContent }, ollamaCt);
                 string respBody = await resp.Content.ReadAsStringAsync(ct);
 
                 if (!resp.IsSuccessStatusCode)
@@ -242,7 +270,7 @@ internal static class OllamaEndpoints
                 ctx.Response.ContentType = "application/x-ndjson";
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-                using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "/v1/chat/completions")
+                using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "v1/chat/completions")
                 {
                     Content = reqContent
                 };

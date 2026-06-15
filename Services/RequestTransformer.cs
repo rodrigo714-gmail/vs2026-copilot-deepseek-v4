@@ -12,31 +12,36 @@ internal sealed class RequestTransformer
         _reasoningCacheService = reasoningCacheService;
     }
 
-    internal string ApplyExecutionDefaults(string rawBody, string model, string providerName = "")
+    internal string ApplyExecutionDefaults(string rawBody, string model, ProviderCapabilities capabilities = default)
     {
         ModelExecutionConfig exec = _modelCatalogService.GetExecutionConfigForModel(model);
-        if (!exec.Temperature.HasValue && !exec.TopP.HasValue && !exec.MaxTokensPreferred.HasValue && string.IsNullOrWhiteSpace(exec.ReasoningEffort))
+        bool hasAnyDefault = exec.Temperature.HasValue
+            || exec.TopP.HasValue
+            || exec.MaxTokensPreferred.HasValue
+            || !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
+        if (!hasAnyDefault)
         {
             return rawBody;
         }
 
-        // reasoning_effort is only supported by DeepSeek and OpenAI native APIs.
-        // Use provider name first; fall back to model-name heuristics only when provider is unknown.
-        string m = model.ToLowerInvariant();
-        string p = providerName.ToLowerInvariant();
-        bool knownProvider = p is "deepseek" or "openai" or "nvidia" or "openrouter" or "groq" or "ollama" or "ollamacloud";
-        bool supportsReasoningEffort = p is "deepseek" or "openai"
-            || (!knownProvider && (m.Contains("deepseek") || m.Contains("gpt-oss") || m.Contains("/o1") || m.Contains("/o3")));
+        // Parameter support is driven by the provider's declared capabilities.
+        // For unknown providers (default capabilities), all feature flags are false
+        // (no reasoning_effort, no top_k) — a safe, conservative default.
+        bool supportsReasoningEffort = capabilities.SupportsReasoningEffort;
 
         // DeepSeek & OpenAI o-series: sending both temperature and top_p simultaneously
         // causes undefined behaviour per official docs. When reasoning_effort is active
         // (i.e. the model is a native reasoner) only emit temperature, not top_p.
-        bool isNativeReasoner = supportsReasoningEffort && !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
+        bool isNativeReasoner = capabilities.SupportsReasoningEffort && !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
 
-        // Providers that do NOT support top_k: DeepSeek, OpenAI (including all OpenAI-derived models).
         // Providers that DO support top_k: NVIDIA, Groq, OpenRouter (passthrough).
-        bool supportsTopK = p is "nvidia" or "groq" or "openrouter";
-        // If provider is unknown, assume top_k is supported (lenient fallback).
+        // Everyone else (including unknown) gets top_k stripped.
+        bool supportsTopK = capabilities.SupportsTopK;
+
+        // OverrideClientParams=true means the configured value is non-negotiable for this
+        // model (e.g. Kimi K2.x requires temperature=1.0). In that mode we overwrite the
+        // client-supplied field instead of only injecting defaults.
+        bool force = exec.OverrideClientParams;
 
         try
         {
@@ -54,17 +59,63 @@ internal sealed class RequestTransformer
 
             foreach (JsonProperty prop in root.EnumerateObject())
             {
-                if (prop.NameEquals("temperature")) hasTemperature = true;
-                else if (prop.NameEquals("top_p")) hasTopP = true;
-                else if (prop.NameEquals("max_tokens")) hasMaxTokens = true;
-                else if (prop.NameEquals("reasoning_effort")) hasReasoningEffort = true;
+                if (prop.NameEquals("temperature"))
+                {
+                    if (force && exec.Temperature.HasValue)
+                    {
+                        writer.WriteNumber("temperature", exec.Temperature.Value);
+                    }
+                    else
+                    {
+                        prop.WriteTo(writer);
+                    }
+                    hasTemperature = true;
+                }
+                else if (prop.NameEquals("top_p"))
+                {
+                    if (force && exec.TopP.HasValue)
+                    {
+                        writer.WriteNumber("top_p", exec.TopP.Value);
+                    }
+                    else
+                    {
+                        prop.WriteTo(writer);
+                    }
+                    hasTopP = true;
+                }
+                else if (prop.NameEquals("max_tokens"))
+                {
+                    if (force && exec.MaxTokensPreferred.HasValue)
+                    {
+                        writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
+                    }
+                    else
+                    {
+                        prop.WriteTo(writer);
+                    }
+                    hasMaxTokens = true;
+                }
+                else if (prop.NameEquals("reasoning_effort"))
+                {
+                    if (force && !string.IsNullOrWhiteSpace(exec.ReasoningEffort))
+                    {
+                        writer.WriteString("reasoning_effort", exec.ReasoningEffort);
+                    }
+                    else
+                    {
+                        prop.WriteTo(writer);
+                    }
+                    hasReasoningEffort = true;
+                }
                 else if (prop.NameEquals("top_k") && !supportsTopK)
                 {
                     // Skip top_k for providers that don't support it
                     continue;
                 }
-
-                prop.WriteTo(writer);
+                else
+                {
+                    prop.WriteTo(writer);
+                }
             }
 
             if (!hasTemperature && exec.Temperature.HasValue)
