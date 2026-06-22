@@ -131,7 +131,7 @@ public class RequestTransformerTests
         Assert.True(root.TryGetProperty("temperature", out JsonElement temp));
         Assert.Equal(0.2, temp.GetDouble());
         Assert.True(root.TryGetProperty("max_tokens", out JsonElement maxTok));
-        Assert.Equal(8192, maxTok.GetInt32());
+        Assert.Equal(131072, maxTok.GetInt32());
     }
 
     [Fact]

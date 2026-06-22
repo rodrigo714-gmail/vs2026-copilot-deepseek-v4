@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-15 — Responses API compatibility layer, model config fixes
+
+### Added
+- **Responses API** (`Endpoints/ResponsesEndpoints.cs`): full `/v1/responses` compatibility for Codex CLI, including streaming, tool calls, and SSE event streaming (885 lines)
+- **Model metadata endpoint**: `GET /v1/models/{modelId}` for detailed per-model metadata via OpenAiEndpoints
+- **Dummy `/api/pull` endpoint**: prevents Ollama clients from erroring on pull requests
+- **Publish profiles** (`Properties/PublishProfiles/`): FolderProfile for local deployment
+
+### Changed
+- **OllamaEndpoints**: version bump, improved role mapping
+- **deepseek.json**: max_tokens increased for deepseek-v4-pro (131072) and deepseek-v4-flash
+- **moonshot.json**: kimi-k2.7-code added as priority 1, vision disabled on kimi-k2.7-code, priorities reordered
+- **nvidia.json**: minor formatting/enablement
+- **.gitignore**: added env/personal file exclusions
+
+### Fixed
+- **moonshot.json**: missing commas after `context_length` in moonshot-v1-128k and moonshot-v1-auto entries (JSON parse error)
+- **ModelCatalogServiceTests**: removed spurious `.Value` from `ResolveProvider()` calls — `ProviderInfo` is a `record struct`, not `Nullable<T>`
+- **RequestTransformerTests**: max_tokens assertion updated from 8192 → 131072 to match deepseek.json config
+- **Tests**: 334/334 passing (30 failures resolved — all cascaded from moonshot.json JSON breakage)
+
 ## 2026-06-11 — Add Qwen 3.7 Plus (OpenRouter), restore provider prefix in /api/tags
 
 ### Added

@@ -50,6 +50,7 @@ ProviderRegistry providerRegistry = app.Services.GetRequiredService<ProviderRegi
 await modelCatalog.RefreshAvailableModels(CancellationToken.None);
 
 app.MapOpenAiEndpoints();
+app.MapResponsesEndpoints();
 app.MapOllamaEndpoints();
 app.MapHealthEndpoints();
 
