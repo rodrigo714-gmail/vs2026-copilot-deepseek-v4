@@ -39,8 +39,11 @@ builder.Services.AddSingleton<ReasoningCacheService>();
 builder.Services.AddSingleton<RequestTransformer>();
 builder.Services.AddSingleton<OllamaResponseBuilder>();
 builder.Services.AddSingleton<ChatStreamingService>();
+builder.Services.AddSingleton<UsageTrackerService>();
+builder.Services.AddSingleton<ProviderBillingService>();
 
 builder.Services.AddHostedService<ProviderBenchmarkService>();
+builder.Services.AddHostedService<UsageSnapshotService>();
 
 WebApplication app = builder.Build();
 app.UseOptionalProxyAuthentication(proxyApiKey);
@@ -52,6 +55,7 @@ await modelCatalog.RefreshAvailableModels(CancellationToken.None);
 app.MapOpenAiEndpoints();
 app.MapOllamaEndpoints();
 app.MapHealthEndpoints();
+app.MapDashboardEndpoints();
 
 Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
 Console.WriteLine($"║   DeepSeek / Multi-Provider Copilot Proxy (Ultra)               ║");

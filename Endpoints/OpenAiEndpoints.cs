@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 internal static class OpenAiEndpoints
 {
@@ -97,7 +98,8 @@ internal static class OpenAiEndpoints
             RequestTransformer requestTransformer,
             ModelCatalogService modelCatalog,
             ChatStreamingService chatStreaming,
-            ReasoningCacheService reasoningCache) =>
+            ReasoningCacheService reasoningCache,
+            UsageTrackerService usageTracker) =>
         {
             CancellationToken ct = ctx.RequestAborted;
 
@@ -180,9 +182,17 @@ internal static class OpenAiEndpoints
                             ctx.Response.StatusCode = (int)response.StatusCode;
                             ctx.Response.ContentType = "application/json";
                             await ctx.Response.WriteAsync(respBody, ct);
+
+                            // Track usage from the response body and headers
+                            RecordUsageFromResponse(usageTracker, candidateProvider.Name, respBody, response.Headers, response.TrailingHeaders);
                             response.Dispose();
                             return;
                         }
+
+                        // Track error for this candidate
+                        usageTracker.RecordError(candidateProvider.Name,
+                            $"HTTP {(int)response.StatusCode}",
+                            ((int)response.StatusCode).ToString());
 
                         lastResponse?.Dispose();
                         lastResponse = response;
@@ -191,6 +201,12 @@ internal static class OpenAiEndpoints
                     }
 
                     // All candidates failed: surface the last upstream error.
+                    if (lastResponse is not null && candidates.Count > 0)
+                    {
+                        usageTracker.RecordError(candidates[^1].Provider.Name,
+                            lastBody is not null ? "All candidates failed" : "no provider candidate available",
+                            lastResponse is not null ? ((int)lastResponse.StatusCode).ToString() : "502");
+                    }
                     ctx.Response.StatusCode = lastResponse is not null ? (int)lastResponse.StatusCode : StatusCodes.Status502BadGateway;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(lastBody ?? "{\"error\":\"no provider candidate available\"}", ct);
@@ -241,9 +257,19 @@ internal static class OpenAiEndpoints
                 ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
                 ctx.Response.ContentType = "application/json";
                 await ctx.Response.WriteAsync(errBody, ct);
+
+                // Track streaming error
+                usageTracker.RecordError(provider.Name, $"HTTP {(int)upstreamResp.StatusCode}", ((int)upstreamResp.StatusCode).ToString());
                 return;
             }
 
+            // For streaming, capture at least the rate-limit headers (usage comes in the last SSE chunk)
+            var rlHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var h in upstreamResp.Headers)
+                rlHeaders[h.Key] = string.Join(", ", h.Value);
+            foreach (var h in upstreamResp.TrailingHeaders)
+                rlHeaders[h.Key] = string.Join(", ", h.Value);
+            usageTracker.RecordRateLimitHeaders(provider.Name, rlHeaders);
             await chatStreaming.StreamAndCache(upstreamResp, ctx.Response, ct);
         });
 
@@ -513,6 +539,77 @@ internal static class OpenAiEndpoints
         writer.WriteEndObject();
         writer.Flush();
         return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    /// <summary>
+    /// Parses the <c>usage</c> object from an upstream response body and records it in the
+    /// <see cref="UsageTrackerService"/>, along with any rate-limit headers.
+    /// </summary>
+    private static void RecordUsageFromResponse(
+        UsageTrackerService usageTracker,
+        string providerName,
+        string responseBody,
+        HttpHeaders responseHeaders,
+        HttpHeaders? trailingHeaders)
+    {
+        Dictionary<string, string?> headers = new(StringComparer.OrdinalIgnoreCase);
+
+        void CollectHeaders(HttpHeaders source)
+        {
+            foreach (var h in source)
+            {
+                headers[h.Key] = string.Join(", ", h.Value);
+            }
+        }
+
+        CollectHeaders(responseHeaders);
+        if (trailingHeaders is not null)
+            CollectHeaders(trailingHeaders);
+
+        long promptTokens = 0, completionTokens = 0, totalTokens = 0;
+        bool hasUsage = false;
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(responseBody);
+            if (doc.RootElement.TryGetProperty("usage", out JsonElement usage))
+            {
+                if (usage.TryGetProperty("prompt_tokens", out JsonElement pt) && pt.ValueKind == JsonValueKind.Number)
+                {
+                    promptTokens = pt.GetInt64();
+                    hasUsage = true;
+                }
+                if (usage.TryGetProperty("completion_tokens", out JsonElement ct) && ct.ValueKind == JsonValueKind.Number)
+                {
+                    completionTokens = ct.GetInt64();
+                    hasUsage = true;
+                }
+                if (usage.TryGetProperty("total_tokens", out JsonElement tt) && tt.ValueKind == JsonValueKind.Number)
+                {
+                    totalTokens = tt.GetInt64();
+                    hasUsage = true;
+                }
+                // Fallback: if total_tokens is missing but prompt+completion are present, compute it
+                if (totalTokens == 0 && promptTokens > 0 && completionTokens > 0)
+                {
+                    totalTokens = promptTokens + completionTokens;
+                }
+            }
+        }
+        catch
+        {
+            // Non-critical: if we can't parse usage, still record the request with zero tokens
+        }
+
+        if (hasUsage || headers.Count > 0)
+        {
+            usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers);
+        }
+        else
+        {
+            // Record the request even without usage data (for providers that don't return usage in body)
+            usageTracker.RecordRequest(providerName, 0, 0, 0, headers);
+        }
     }
 
     private static string ConvertOllamaChatToOpenAiCompletion(string ollamaResponseBody, string effectiveModel)
