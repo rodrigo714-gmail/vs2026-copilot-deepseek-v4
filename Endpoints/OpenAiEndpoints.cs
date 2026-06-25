@@ -550,7 +550,9 @@ internal static class OpenAiEndpoints
         string providerName,
         string responseBody,
         HttpHeaders responseHeaders,
-        HttpHeaders? trailingHeaders)
+        HttpHeaders? trailingHeaders,
+        long latencyMs = 0,
+        string model = "")
     {
         Dictionary<string, string?> headers = new(StringComparer.OrdinalIgnoreCase);
 
@@ -589,27 +591,17 @@ internal static class OpenAiEndpoints
                     totalTokens = tt.GetInt64();
                     hasUsage = true;
                 }
-                // Fallback: if total_tokens is missing but prompt+completion are present, compute it
                 if (totalTokens == 0 && promptTokens > 0 && completionTokens > 0)
                 {
                     totalTokens = promptTokens + completionTokens;
                 }
             }
         }
-        catch
-        {
-            // Non-critical: if we can't parse usage, still record the request with zero tokens
-        }
+        catch { }
 
-        if (hasUsage || headers.Count > 0)
-        {
-            usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers);
-        }
-        else
-        {
-            // Record the request even without usage data (for providers that don't return usage in body)
-            usageTracker.RecordRequest(providerName, 0, 0, 0, headers);
-        }
+        double cost = hasUsage ? ModelPricing.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+
+        usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
     }
 
     private static string ConvertOllamaChatToOpenAiCompletion(string ollamaResponseBody, string effectiveModel)

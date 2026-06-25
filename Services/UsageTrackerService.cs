@@ -2,7 +2,8 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 
 /// <summary>
-/// Thread-safe singleton that tracks per-provider usage stats (tokens, requests, rate-limits, errors).
+/// Thread-safe singleton that tracks per-provider usage stats (tokens, requests, rate-limits, errors,
+/// latency, cost, and throughput).
 /// Automatically registers new providers on first request — no need to pre-configure.
 /// </summary>
 internal sealed class UsageTrackerService
@@ -15,16 +16,19 @@ internal sealed class UsageTrackerService
     private readonly object _snapshotLock = new();
 
     /// <summary>
-    /// Records a successful request, accumulating tokens and updating rate-limit headers.
+    /// Records a successful request, accumulating tokens, latency, cost, and updating rate-limit headers.
     /// </summary>
     internal void RecordRequest(
         string providerName,
         long promptTokens,
         long completionTokens,
         long totalTokens,
-        Dictionary<string, string?>? responseHeaders = null)
+        Dictionary<string, string?>? responseHeaders = null,
+        long latencyMs = 0,
+        double estimatedCostUsd = 0)
     {
         var stats = _stats.GetOrAdd(providerName, _ => new ProviderUsageStats(providerName));
+        DateTime now = DateTime.UtcNow;
 
         lock (stats.Lock)
         {
@@ -32,9 +36,25 @@ internal sealed class UsageTrackerService
             stats.TotalPromptTokens += promptTokens;
             stats.TotalCompletionTokens += completionTokens;
             stats.TotalTokens += totalTokens;
-            stats.LastRequestTime = DateTime.UtcNow;
+            stats.LastRequestTime = now;
             stats.LastRequestSuccess = true;
             stats.LastErrorMessage = null;
+
+            // Latency tracking (weighted moving average)
+            stats.TotalLatencyMs += latencyMs;
+            stats.LatencySampleCount++;
+
+            // Cost tracking
+            stats.TotalEstimatedCost += estimatedCostUsd;
+
+            // RPM tracking: count requests in last minute window
+            stats.LastMinuteRequests++;
+            stats.LastMinuteWindowStart ??= now;
+            if ((now - stats.LastMinuteWindowStart.Value).TotalSeconds > 60)
+            {
+                stats.LastMinuteRequests = 1;
+                stats.LastMinuteWindowStart = now;
+            }
 
             // Parse rate-limit headers from upstream response
             if (responseHeaders is not null)
@@ -49,18 +69,32 @@ internal sealed class UsageTrackerService
     /// <summary>
     /// Records a failed request (upstream error).
     /// </summary>
-    internal void RecordError(string providerName, string? errorMessage, string? statusCode = null)
+    internal void RecordError(string providerName, string? errorMessage, string? statusCode = null, long latencyMs = 0)
     {
         var stats = _stats.GetOrAdd(providerName, _ => new ProviderUsageStats(providerName));
+        DateTime now = DateTime.UtcNow;
 
         lock (stats.Lock)
         {
             stats.TotalRequests++;
-            stats.LastRequestTime = DateTime.UtcNow;
+            stats.LastRequestTime = now;
             stats.LastRequestSuccess = false;
             stats.LastErrorMessage = errorMessage;
-            stats.LastErrorTime = DateTime.UtcNow;
+            stats.LastErrorTime = now;
             stats.LastErrorStatusCode = statusCode;
+
+            // Track latency even for errors
+            stats.TotalLatencyMs += latencyMs;
+            stats.LatencySampleCount++;
+
+            // RPM tracking
+            stats.LastMinuteRequests++;
+            stats.LastMinuteWindowStart ??= now;
+            if ((now - stats.LastMinuteWindowStart.Value).TotalSeconds > 60)
+            {
+                stats.LastMinuteRequests = 1;
+                stats.LastMinuteWindowStart = now;
+            }
         }
 
         TryTakeSnapshot();
@@ -84,22 +118,18 @@ internal sealed class UsageTrackerService
     /// </summary>
     internal DashboardData GetAllStats()
     {
-        // Start with all configured providers from ProviderRegistry
         var allProviderNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Add providers that have recorded stats
         foreach (string name in _stats.Keys)
         {
             allProviderNames.Add(name);
         }
 
-        // Also include providers from the registry (even if no requests yet)
-        // The call site should pass in known providers from ProviderRegistry.
-
         long totalRequests = 0;
         long totalPromptTokens = 0;
         long totalCompletionTokens = 0;
         long totalTokens = 0;
+        double totalEstimatedCost = 0;
 
         var providers = new List<ProviderStatsEntry>();
         foreach (string name in allProviderNames.OrderBy(n => n))
@@ -112,6 +142,7 @@ internal sealed class UsageTrackerService
                     totalPromptTokens += stats.TotalPromptTokens;
                     totalCompletionTokens += stats.TotalCompletionTokens;
                     totalTokens += stats.TotalTokens;
+                    totalEstimatedCost += stats.TotalEstimatedCost;
 
                     providers.Add(new ProviderStatsEntry
                     {
@@ -133,7 +164,8 @@ internal sealed class UsageTrackerService
                 TotalRequests = totalRequests,
                 TotalPromptTokens = totalPromptTokens,
                 TotalCompletionTokens = totalCompletionTokens,
-                TotalTokens = totalTokens
+                TotalTokens = totalTokens,
+                TotalEstimatedCost = totalEstimatedCost
             },
             Snapshots = recentSnapshots
         };
@@ -229,7 +261,6 @@ internal sealed class UsageTrackerService
             if (string.IsNullOrEmpty(val))
                 continue;
 
-            // OpenAI / DeepSeek / Groq style
             if (key == "x-ratelimit-limit-requests" && int.TryParse(val, out int limitRequests))
                 stats.RateLimitRequests = limitRequests;
             else if (key == "x-ratelimit-remaining-requests" && int.TryParse(val, out int remainingRequests))
@@ -240,10 +271,8 @@ internal sealed class UsageTrackerService
                 stats.RateLimitRemainingTokens = remainingTokens;
             else if (key == "x-ratelimit-reset-requests")
             {
-                // Can be seconds (number) or epoch timestamp or ISO date
                 if (long.TryParse(val, out long resetSeconds))
                 {
-                    // If the value is small (< 1 year in seconds), treat as seconds from now
                     if (resetSeconds < 31_536_000)
                         stats.RateLimitReset = DateTime.UtcNow.AddSeconds(resetSeconds);
                     else
@@ -254,7 +283,6 @@ internal sealed class UsageTrackerService
                     stats.RateLimitReset = resetDate.ToUniversalTime();
                 }
             }
-            // OpenRouter credits
             else if (key == "x-credits-remaining" && double.TryParse(val, out double credits))
             {
                 stats.CreditsRemaining = credits;
@@ -293,6 +321,21 @@ internal sealed class ProviderUsageStats
     public DateTime? LastErrorTime;
     public string? LastErrorStatusCode;
 
+    // Latency (ms)
+    public long TotalLatencyMs;
+    public long LatencySampleCount;
+
+    // Cost (USD)
+    public double TotalEstimatedCost;
+
+    // Throughput (RPM)
+    public int LastMinuteRequests;
+    public DateTime? LastMinuteWindowStart;
+
+    // Computed properties
+    public double? AverageLatencyMs => LatencySampleCount > 0 ? (double)TotalLatencyMs / LatencySampleCount : null;
+    public double? CurrentRpm => LastMinuteRequests;
+
     internal ProviderUsageStats(string providerName)
     {
         ProviderName = providerName;
@@ -319,7 +362,12 @@ internal sealed class ProviderUsageStats
                 LastRequestSuccess = LastRequestSuccess,
                 LastErrorMessage = LastErrorMessage,
                 LastErrorTime = LastErrorTime,
-                LastErrorStatusCode = LastErrorStatusCode
+                LastErrorStatusCode = LastErrorStatusCode,
+                TotalLatencyMs = TotalLatencyMs,
+                LatencySampleCount = LatencySampleCount,
+                TotalEstimatedCost = TotalEstimatedCost,
+                LastMinuteRequests = LastMinuteRequests,
+                LastMinuteWindowStart = LastMinuteWindowStart
             };
         }
     }
@@ -338,6 +386,7 @@ internal sealed record AggregateTotals
     public long TotalPromptTokens { get; init; }
     public long TotalCompletionTokens { get; init; }
     public long TotalTokens { get; init; }
+    public double TotalEstimatedCost { get; init; }
 }
 
 internal sealed record UsageSnapshot

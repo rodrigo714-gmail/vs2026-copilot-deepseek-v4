@@ -516,6 +516,10 @@ function renderSummary(totals) {
       <div class=""label"">Total Tokens</div>
       <div class=""value"">${formatNumber(totals.total_tokens)}</div>
     </div>
+    <div class=""summary-card"">
+      <div class=""label"">Estimated Cost (USD)</div>
+      <div class=""value"">$${(totals.total_estimated_cost || 0).toFixed(4)}</div>
+    </div>
   `;
 }
 
@@ -660,10 +664,28 @@ function renderProviderCards(providers) {
             <span class=""stat-value"">${s.rate_limit_remaining_requests} / ${s.rate_limit_requests ?? '?'}</span>
           </div>
         ` : ''}
-        ${s.credits_remaining !== null ? `
+        ${s.average_latency_ms ? `
+          <div class=""stat-row"">
+            <span class=""stat-label"">Avg latency</span>
+            <span class=""stat-value"">${s.average_latency_ms.toFixed(0)}ms</span>
+          </div>
+        ` : ''}
+        ${s.current_rpm ? `
+          <div class=""stat-row"">
+            <span class=""stat-label"">RPM</span>
+            <span class=""stat-value"">${s.current_rpm} req/min</span>
+          </div>
+        ` : ''}
+        ${s.total_estimated_cost > 0 ? `
+          <div class=""stat-row"">
+            <span class=""stat-label"">Est. cost</span>
+            <span class=""stat-value"">$${s.total_estimated_cost.toFixed(6)}</span>
+          </div>
+        ` : ''}
+        ${(s.credits_remaining !== null && s.credits_remaining !== undefined) ? `
           <div class=""stat-row"">
             <span class=""stat-label"">Credits</span>
-            <span class=""stat-value"">${s.credits_remaining.toFixed(4)}</span>
+            <span class=""stat-value"">${Number(s.credits_remaining).toFixed(4)}</span>
           </div>
         ` : ''}
         ${s.last_error_message ? `
@@ -723,10 +745,10 @@ function openModal(providerName) {
           <div class=""value"">${s.rate_limit_remaining_tokens ?? '?'} / ${s.rate_limit_tokens ?? '?'}</div>
         </div>
         ` : ''}
-        ${s.credits_remaining !== null ? `
+        ${(s.credits_remaining !== null && s.credits_remaining !== undefined) ? `
         <div class=""detail-item"">
           <div class=""label"">Credits remaining</div>
-          <div class=""value"">${s.credits_remaining.toFixed(6)}</div>
+          <div class=""value"">${Number(s.credits_remaining).toFixed(6)}</div>
         </div>
         ` : ''}
         ${s.last_error_message ? `
