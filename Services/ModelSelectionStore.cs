@@ -196,7 +196,9 @@ internal sealed class ModelSelectionStore
                             );
                         }
 
-                        entries.Add(new ModelSelectionEntry(matchValue!, priority, enabled, exec));
+                        string? upstream = item.TryGetProperty("upstream", out JsonElement upE) && upE.ValueKind == JsonValueKind.String
+                            ? upE.GetString() : null;
+                        entries.Add(new ModelSelectionEntry(matchValue!, priority, enabled, exec, upstream));
                     }
 
                     if (entries.Count > 0)

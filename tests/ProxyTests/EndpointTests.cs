@@ -35,7 +35,7 @@ public sealed class ProxyFixture : IDisposable
         "data: [DONE]\n\n";
 
     private const string FakeModels = """
-        {"object":"list","data":[{"id":"test-model","object":"model","created":1700000000,"owned_by":"test"}]}
+        {"object":"list","data":[{"id":"deepseek-v4-pro","object":"model","created":1700000000,"owned_by":"test"}]}
         """;
 
     private readonly WebApplication _stub;
@@ -232,7 +232,7 @@ public class EndpointTests(ProxyFixture fixture)
     public async Task V1Chat_NonStreaming_Returns200WithJson()
     {
         using StringContent body = new(
-            """{"model":"test-model","messages":[{"role":"user","content":"hi"}],"stream":false}""",
+            """{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}],"stream":false}""",
             System.Text.Encoding.UTF8, "application/json");
 
         HttpResponseMessage r = await _client.PostAsync("/v1/chat/completions", body);

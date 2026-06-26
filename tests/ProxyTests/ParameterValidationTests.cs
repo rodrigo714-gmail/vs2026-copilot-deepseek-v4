@@ -552,7 +552,7 @@ public class ParameterValidationTests
     [InlineData("cerebras", 2)]
     [InlineData("ollama", 10)]        // 9 ollamacloud + 1 ollama.json (mistral)
     [InlineData("ollamacloud", 10)]  // 7 enabled + disabled
-    [InlineData("zenmux", 2)]      // 2 enabled (glm-5.2-free, kimi-k2.7-code-free) — solo free tier
+    [InlineData("zenmux", 20)]     // All 20 entries enabled (multi-provider aggregator)
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {
         ModelSelectionStore store = new();

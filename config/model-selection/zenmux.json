@@ -2,7 +2,8 @@
   "provider": "zenmux",
   "models": [
     {
-      "match": "glm-5.2-free",
+      "match": "z-ai/glm-5.2",
+      "upstream": "z-ai/glm-5.2",
       "priority": 1,
       "enabled": true,
       "execution": {
@@ -18,9 +19,27 @@
       }
     },
     {
-      "match": "glm-5.2",
+      "match": "glm-5.2-free",
+      "upstream": "z-ai/glm-5.2",
       "priority": 2,
-      "enabled": false,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "z-ai",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "glm-5.2",
+      "upstream": "z-ai/glm-5.2",
+      "priority": 3,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -35,7 +54,8 @@
     },
     {
       "match": "kimi-k2.7-code-free",
-      "priority": 3,
+      "upstream": "moonshotai/kimi-k2.7-code",
+      "priority": 4,
       "enabled": true,
       "execution": {
         "context_length": 262144,
@@ -53,8 +73,9 @@
     },
     {
       "match": "kimi-k2.7-code",
-      "priority": 4,
-      "enabled": false,
+      "upstream": "moonshotai/kimi-k2.7-code",
+      "priority": 5,
+      "enabled": true,
       "execution": {
         "context_length": 262144,
         "max_output_tokens": 262144,
@@ -71,8 +92,9 @@
     },
     {
       "match": "kimi-k2.6",
-      "priority": 5,
-      "enabled": false,
+      "upstream": "moonshotai/kimi-k2.6",
+      "priority": 6,
+      "enabled": true,
       "execution": {
         "context_length": 262144,
         "max_output_tokens": 262144,
@@ -88,9 +110,29 @@
       }
     },
     {
+      "match": "kimi-k2.7-code-highspeed",
+      "upstream": "moonshotai/kimi-k2.7-code-highspeed",
+      "priority": 7,
+      "enabled": true,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "moonshotai",
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "timeout_seconds": 180,
+        "override_client_params": true
+      }
+    },
+    {
       "match": "qwen3.7-plus",
-      "priority": 6,
-      "enabled": false,
+      "upstream": "qwen/qwen3.7-plus",
+      "priority": 8,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -106,8 +148,27 @@
     },
     {
       "match": "qwen3.7-max",
-      "priority": 7,
-      "enabled": false,
+      "upstream": "qwen/qwen3.7-max",
+      "priority": 9,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "qwen",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "timeout_seconds": 180
+      }
+    },
+    {
+      "match": "qwen3.6-plus",
+      "upstream": "qwen/qwen3.6-plus",
+      "priority": 10,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -123,8 +184,9 @@
     },
     {
       "match": "gemini-3.5-flash",
-      "priority": 8,
-      "enabled": false,
+      "upstream": "google/gemini-3.5-flash",
+      "priority": 11,
+      "enabled": true,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 65536,
@@ -139,8 +201,27 @@
     },
     {
       "match": "gpt-5.5-pro",
-      "priority": 9,
-      "enabled": false,
+      "upstream": "openai/gpt-5.5-pro",
+      "priority": 12,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "openai",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "match": "gpt-5.5",
+      "upstream": "openai/gpt-5.5",
+      "priority": 13,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -156,8 +237,9 @@
     },
     {
       "match": "deepseek-v4-pro",
-      "priority": 10,
-      "enabled": false,
+      "upstream": "deepseek/deepseek-v4-pro",
+      "priority": 14,
+      "enabled": true,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 384000,
@@ -172,8 +254,9 @@
     },
     {
       "match": "deepseek-v4-flash",
-      "priority": 11,
-      "enabled": false,
+      "upstream": "deepseek/deepseek-v4-flash",
+      "priority": 15,
+      "enabled": true,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 131072,
@@ -188,8 +271,9 @@
     },
     {
       "match": "grok-4.3",
-      "priority": 12,
-      "enabled": false,
+      "upstream": "x-ai/grok-4.3",
+      "priority": 16,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -204,8 +288,9 @@
     },
     {
       "match": "grok-build-0.1",
-      "priority": 13,
-      "enabled": false,
+      "upstream": "x-ai/grok-build-0.1",
+      "priority": 17,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -219,43 +304,10 @@
       }
     },
     {
-      "match": "gpt-5.5",
-      "priority": 14,
-      "enabled": false,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "openai",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 16384,
-        "timeout_seconds": 300
-      }
-    },
-    {
-      "match": "qwen3.6-plus",
-      "priority": 15,
-      "enabled": false,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
       "match": "claude-opus-4.8",
-      "priority": 20,
-      "enabled": false,
+      "upstream": "anthropic/claude-opus-4.8",
+      "priority": 18,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -271,8 +323,9 @@
     },
     {
       "match": "claude-fable-5",
-      "priority": 21,
-      "enabled": false,
+      "upstream": "anthropic/claude-fable-5",
+      "priority": 19,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -288,8 +341,9 @@
     },
     {
       "match": "minimax-m3",
-      "priority": 22,
-      "enabled": false,
+      "upstream": "minimax/minimax-m3",
+      "priority": 20,
+      "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,

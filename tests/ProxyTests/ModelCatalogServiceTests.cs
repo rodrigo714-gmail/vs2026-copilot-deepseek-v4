@@ -142,11 +142,11 @@ public class ModelCatalogServiceTests : IDisposable
     public async Task Nvidia_OnlyProvider_ClaimsBareName()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
-            BuildCatalog(new Dictionary<string, string[]> { ["nvidia"] = ["nvidia/llama-3.1-nemotron-70b-instruct"] });
+            BuildCatalog(new Dictionary<string, string[]> { ["nvidia"] = ["nvidia/nemotron-3-super-120b-a12b"] });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("nvidia", registry.ResolveProvider("nvidia/llama-3.1-nemotron-70b-instruct").Name);
+        Assert.Equal("nvidia", registry.ResolveProvider("nvidia/nemotron-3-super-120b-a12b").Name);
     }
 
     [Fact]
@@ -202,12 +202,12 @@ public class ModelCatalogServiceTests : IDisposable
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(
-                new Dictionary<string, string[]> { ["ollama"] = ["gpt-oss-120b"] },
+                new Dictionary<string, string[]> { ["ollama"] = ["deepseek-v4-pro"] },
                 ollamaProviders: ["ollama"]);
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b").Name);
+        Assert.Equal("ollama", registry.ResolveProvider("deepseek-v4-pro").Name);
     }
 
     // ── Cross-provider collisions ───────────────────────────────────────

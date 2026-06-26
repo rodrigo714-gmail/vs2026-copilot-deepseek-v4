@@ -83,6 +83,7 @@ internal sealed class ProviderRegistry
             throw new InvalidOperationException("ProviderRegistry: no providers are registered (check PROVIDER_*_API_KEY env vars).");
         if (!string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.TryGetValue(requestedModel, out ProviderInfo provider))
             return provider;
+        // Fall back to the first registered provider when the model isn't known.
         return _providers[0];
     }
 
@@ -93,17 +94,20 @@ internal sealed class ProviderRegistry
 
         if (!string.IsNullOrWhiteSpace(requestedModel))
         {
-            // Strip Ollama-style tag suffix (e.g., "deepseek-v4-pro:latest" → "deepseek-v4-pro")
             string cleanModel = StripTagSuffix(requestedModel);
+            // Handle VS 2026 Copilot display format from /api/tags: "PROVIDER - model_name:latest"
+            cleanModel = StripProviderDisplayPrefix(cleanModel);
             if (_modelToProvider.ContainsKey(cleanModel))
                 return cleanModel;
 
-            // Accept the OpenAI-style "provider/model" form (e.g. "groq/llama-3.3-70b-versatile"
-            // or "nvidia/qwen3.5-397b-a17b"). Some providers (NVIDIA in particular) expose
-            // upstream ids with a slash prefix ("qwen/qwen3.5-397b-a17b"), so first try the
-            // full id verbatim, then fall back to stripping the provider prefix, and finally
-            // try matching the requested bare against any upstream id owned by the hinted
-            // provider that ends with that bare.
+            // Fallback: search for keys whose suffix (after the last '/') matches
+            // the cleaned model name. This handles cases where an upstream model
+            // is stored with a provider prefix like "models/gemini-2.5-pro" but the
+            // Copilot display name strips the prefix.
+            string? fallback = FindModelBySuffix(cleanModel);
+            if (fallback is not null)
+                return fallback;
+
             int slash = cleanModel.IndexOf('/');
             if (slash > 0 && slash < cleanModel.Length - 1)
             {
@@ -114,15 +118,7 @@ internal sealed class ProviderRegistry
                 if (_modelToProvider.ContainsKey(bare))
                     return bare;
 
-                // Last-resort match: look for any upstream id in the hinted provider
-                // whose suffix equals the requested bare (e.g. requested bare
-                // "qwen3.5-397b-a17b" matches upstream "qwen/qwen3.5-397b-a17b").
                 string? providerHint = cleanModel[..slash];
-                if (_modelToProvider.TryGetValue(bare, out _))
-                {
-                    return bare; // unreachable, but keeps the flow explicit
-                }
-
                 foreach (KeyValuePair<string, ProviderInfo> kv in _modelToProvider)
                 {
                     if (!string.Equals(kv.Value.Name, providerHint, StringComparison.OrdinalIgnoreCase))
@@ -135,7 +131,65 @@ internal sealed class ProviderRegistry
             }
         }
 
+        Console.WriteLine($"[ProviderRegistry] Model '{requestedModel}' not found — falling back to default '{DefaultModel}'.");
         return DefaultModel;
+    }
+
+    /// <summary>
+    /// Returns true if the model name is known in the provider mapping.
+    /// </summary>
+    internal bool IsModelKnown(string model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return false;
+        string clean = StripTagSuffix(model);
+        clean = StripProviderDisplayPrefix(clean);
+        if (_modelToProvider.ContainsKey(clean))
+            return true;
+        // Fallback: search by suffix (e.g. "gemini-2.5-pro" matches "models/gemini-2.5-pro")
+        return FindModelBySuffix(clean) is not null;
+    }
+
+    /// <summary>
+    /// Removes the Copilot BYOM display prefix from a model name (e.g. "ZENMUX - claude-opus-4.8" → "claude-opus-4.8").
+    /// This is the format VS 2026 Copilot sends to /api/show from the /api/tags name field.
+    /// </summary>
+    private string StripProviderDisplayPrefix(string model)
+    {
+        int dashIdx = model.IndexOf(" - ");
+        if (dashIdx > 0)
+        {
+            string maybeProvider = model[..dashIdx];
+            if (_providers.Any(p => string.Equals(p.Name, maybeProvider, StringComparison.OrdinalIgnoreCase)))
+            {
+                return model[(dashIdx + 3)..].Trim();
+            }
+        }
+        return model;
+    }
+
+    /// <summary>
+    /// Searches the model registry for a key whose last path segment matches the given name.
+    /// For example, "gemini-2.5-pro" matches "models/gemini-2.5-pro" or "models/gemini-2.5-pro@google".
+    /// Returns the first matching key, or null if none found.
+    /// </summary>
+    private string? FindModelBySuffix(string name)
+    {
+        foreach (string key in _modelToProvider.Keys)
+        {
+            // Check bare suffix (e.g. "models/gemini-2.5-pro")
+            int lastSlash = key.LastIndexOf('/');
+            string suffix = lastSlash >= 0 ? key[(lastSlash + 1)..] : key;
+
+            // Strip @provider tag from the suffix before comparing
+            int atIdx = suffix.IndexOf('@');
+            if (atIdx > 0)
+                suffix = suffix[..atIdx];
+
+            if (string.Equals(suffix, name, StringComparison.OrdinalIgnoreCase))
+                return key;
+        }
+        return null;
     }
 
     /// <summary>Removes the tag portion of an Ollama model name (e.g. "model:latest" → "model").</summary>
@@ -170,10 +224,29 @@ internal sealed class ProviderRegistry
 
         if (_upstreamToProviders.TryGetValue(upstream, out List<ProviderInfo>? providers) && providers.Count > 0)
         {
-            return providers.Select(p => (p, upstream)).ToArray();
+            // The resolved model name is explicitly mapped to a primary provider via
+            // the model-selection config (e.g. "qwen3.7-plus" → zenmux). Even if other
+            // providers (e.g. openrouter) claim the same upstream model with a lower
+            // (better) priority, the primary provider MUST be the first candidate.
+            // Otherwise a user who selected "ZENMUX - qwen3.7-plus" from the /api/tags
+            // list could silently receive responses from a different provider.
+            var candidates = providers.Select(p => (p, upstream)).ToList();
+            if (_modelToProvider.TryGetValue(resolved, out ProviderInfo primary))
+            {
+                int primaryIdx = candidates.FindIndex(c =>
+                    string.Equals(c.p.Name, primary.Name, StringComparison.OrdinalIgnoreCase));
+                if (primaryIdx > 0)
+                {
+                    var primaryCandidate = candidates[primaryIdx];
+                    candidates.RemoveAt(primaryIdx);
+                    candidates.Insert(0, primaryCandidate);
+                }
+            }
+            return candidates;
         }
 
-        // Empty registry → return no candidates; ResolveProvider would throw.
+        // When no upstream candidates exist, return the fallback — the first
+        // registered provider acting as default.
         if (_providers.Count == 0)
             return [];
         return [(ResolveProvider(resolved), upstream)];
