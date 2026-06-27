@@ -4,6 +4,23 @@ using System.Text.Json;
 internal sealed class ChatStreamingService
 {
     private readonly ReasoningCacheService _reasoningCacheService;
+    private readonly UsageTracker _usageTracker;
+    private readonly ProxyLogger _logger;
+
+    public ChatStreamingService(ReasoningCacheService reasoningCacheService, UsageTracker usageTracker, ProxyLogger logger)
+    {
+        _reasoningCacheService = reasoningCacheService;
+        _usageTracker = usageTracker;
+        _logger = logger;
+    }
+
+    internal async Task StreamAndCache(HttpResponseMessage upstream, HttpResponse downstream, CancellationToken ct)
+using System.Text;
+using System.Text.Json;
+
+internal sealed class ChatStreamingService
+{
+    private readonly ReasoningCacheService _reasoningCacheService;
 
     public ChatStreamingService(ReasoningCacheService reasoningCacheService)
     {

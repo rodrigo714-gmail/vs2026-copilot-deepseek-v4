@@ -33,7 +33,7 @@ internal static class ProviderCapabilitiesRegistry
         ["moonshot"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: false,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -60,6 +60,16 @@ internal static class ProviderCapabilitiesRegistry
             DefaultBaseUrl: "https://api.cerebras.ai",
             EnvPrefix: "CEREBRAS"),
 
+
+        ["zai"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: true,
+            SupportsTopK: false,
+            ChatPath: "chat/completions",
+            ModelsPath: "models",
+            DefaultBaseUrl: "https://api.z.ai/api/paas/v4",
+            EnvPrefix: "ZAI"),
         // ── Multi-model providers (OpenAI-compatible API) ────────────────────
         ["nvidia"] = new(
             Category: ProviderCategory.MultiModel,
