@@ -3,11 +3,11 @@ WORKDIR /src
 COPY *.csproj .
 RUN dotnet restore
 COPY . .
-RUN dotnet publish vs2026-copilot-deepseek-v4.csproj -c Release -o /app --no-restore
+RUN dotnet publish ai-proxy-hub.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/nightly/aspnet:10.0-preview
 WORKDIR /app
 COPY --from=build /app .
 USER $APP_UID
 EXPOSE 11434
-ENTRYPOINT ["dotnet", "vs2026-copilot-deepseek-v4.dll"]
+ENTRYPOINT ["dotnet", "ai-proxy-hub.dll"]

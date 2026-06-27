@@ -37,7 +37,7 @@ public class ModelSelectionStoreTests
 
         ModelExecutionConfig config = store.GetExecutionConfigForModel("nonexistent-model-xyz", registry.ModelToProvider);
 
-        Assert.NotNull(config);
+        Assert.False(config.OverrideClientParams);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class ModelSelectionStoreTests
 
         Assert.NotNull(entry);
         Assert.Equal("qwen3-coder:480b", entry.Value.Match);
-        Assert.Equal(1, entry.Value.Priority);
+        Assert.Equal(4, entry.Value.Priority);
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public class ModelSelectionStoreTests
         ModelExecutionConfig config = store.GetExecutionConfigForModel("qwen3-coder:480b", registry.ModelToProvider);
 
         Assert.True(config.ContextLength.HasValue);
-        Assert.Equal(128_000, config.ContextLength.Value);
+        Assert.Equal(1_000_000, config.ContextLength.Value);
     }
 
     [Fact]
@@ -314,8 +314,8 @@ public class ModelSelectionStoreTests
 
         int priority = store.GetPreferredModelPriority("kimi-k2.6", "ollama");
 
-        // kimi-k2.6 is priority 4 in ollamacloud.json (after the three qwen3-coder/devstral picks)
-        Assert.Equal(4, priority);
+        // kimi-k2.6 is priority 7 in ollamacloud.json
+        Assert.Equal(7, priority);
     }
 
     [Fact]
@@ -344,13 +344,13 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_DeepSeekCoder_HasReasoningEffort()
+    public void GetExecutionConfigForModel_DeepSeekFlash_HasReasoningEffort()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-coder-6.7b-instruct", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-v4-flash", registry.ModelToProvider);
 
         Assert.False(string.IsNullOrWhiteSpace(config.ReasoningEffort));
     }

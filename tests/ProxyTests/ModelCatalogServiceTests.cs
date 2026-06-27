@@ -28,6 +28,7 @@ public class ModelCatalogServiceTests : IDisposable
             "PROVIDER_OPENROUTER_API_KEY", "PROVIDER_OPENROUTER_BASE_URL",
             "PROVIDER_GROQ_API_KEY", "PROVIDER_GROQ_BASE_URL",
             "PROVIDER_OLLAMACLOUD_API_KEY", "PROVIDER_OLLAMA_API_KEY", "PROVIDER_OLLAMA_BASE_URL",
+            "PROVIDER_GOOGLE_API_KEY", "PROVIDER_GOOGLE_BASE_URL",
             "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
             "DEEPSEEK_MODEL"
@@ -180,6 +181,20 @@ public class ModelCatalogServiceTests : IDisposable
 
         Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6").Name);
         Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"].Name);
+    }
+
+    [Fact]
+    public async Task Google_OnlyProvider_ClaimsBareName()
+    {
+        (ModelCatalogService catalog, ProviderRegistry registry, _) =
+            BuildCatalog(new Dictionary<string, string[]> { ["google"] = ["models/gemini-2.5-flash"] });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        Assert.Equal("google", registry.ResolveProvider("models/gemini-2.5-flash").Name);
+        Assert.Equal("google", registry.ModelToProvider["models/gemini-2.5-flash"].Name);
+        Assert.Equal("google", registry.ModelToProvider["models/gemini-2.5-flash@google"].Name);
+        Assert.Contains("models/gemini-2.5-flash", catalog.AvailableModels);
     }
 
     [Fact]

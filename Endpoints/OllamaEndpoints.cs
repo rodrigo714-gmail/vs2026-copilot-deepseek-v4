@@ -22,7 +22,7 @@ internal static class OllamaEndpoints
                 providerRegistry.Providers.Select(p => p.Name),
                 StringComparer.OrdinalIgnoreCase);
 
-            List<(string Model, int Priority)> configuredEnabled = [];
+            List<(string Provider, string Model, int Priority)> configuredEnabled = [];
             foreach ((string providerName, ModelSelectionEntry[] entries) in modelSelectionStore.ProviderModelSelections)
             {
                 if (!activeProviders.Contains(providerName))
@@ -33,27 +33,59 @@ internal static class OllamaEndpoints
                     if (!entry.Enabled)
                         continue;
 
-                    configuredEnabled.Add((entry.Match, entry.Priority));
+                    configuredEnabled.Add((providerName, entry.Match, entry.Priority));
                 }
             }
 
-            // Distinct by model id and keep deterministic ordering by priority, then name.
-            string[] models = configuredEnabled
-                .OrderBy(x => x.Priority)
-                .ThenBy(x => x.Model, StringComparer.OrdinalIgnoreCase)
-                .Select(x => x.Model)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            static string NormalizeModelForDisplay(string model)
+            {
+                string clean = model.Trim();
+                int slash = clean.IndexOf('/');
+                if (slash > 0 && slash < clean.Length - 1)
+                    clean = clean[(slash + 1)..];
+
+                return clean;
+            }
+
+            // Group by provider + normalized display model to reduce duplicate aliases such as
+            // "kimi-k2.6" and "moonshotai/kimi-k2.6" in the same provider slot.
+            // For each group, keep the best entry by priority and then by readability (prefer non-prefixed ids).
+            var curated = configuredEnabled
+                .Select(x => new
+                {
+                    x.Provider,
+                    x.Model,
+                    x.Priority,
+                    DisplayModel = NormalizeModelForDisplay(x.Model)
+                })
+                .GroupBy(x => $"{x.Provider.ToLowerInvariant()}::{x.DisplayModel.ToLowerInvariant()}")
+                .Select(g => g
+                    .OrderBy(x => x.Priority)
+                    .ThenBy(x => x.Model.Contains('/') ? 1 : 0)
+                    .ThenBy(x => x.Model.Length)
+                    .First())
+                .OrderBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.Priority)
+                .ThenBy(x => x.DisplayModel, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             return Results.Json(new
             {
-                models = models.Select(m =>
+                models = curated.Select(x =>
                 {
-                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(m);
+                    string providerPrefix = x.Provider.ToUpperInvariant();
+                    string displayName = $"{providerPrefix} - {x.DisplayModel}";
+                    string routedModel = x.Model;
+                    // Use a provider-qualified alias so that when the client sends this back
+                    // as the model name, the proxy routes it uniquely to the correct provider
+                    // instead of falling back to the default (e.g. DeepSeek).
+                    string qualifiedModel = $"{routedModel}@{x.Provider}:latest";
+
+                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(routedModel);
                     return new
                     {
-                        name = m + ":latest",
-                        model = m + ":latest",
+                        name = displayName + ":latest",
+                        model = qualifiedModel,
                         modified_at = DateTime.UtcNow.ToString("o"),
                         size = 3_826_793_677L,
                         digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -127,6 +159,12 @@ internal static class OllamaEndpoints
             string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
             ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
             ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
+
+            // ── Diagnostic headers ───────────────────────────────────────
+            ctx.Response.Headers["X-Proxy-Requested-Model"] = ollamaRequestedModel;
+            ctx.Response.Headers["X-Proxy-Resolved-Model"] = ollamaEffectiveModel;
+            ctx.Response.Headers["X-Proxy-Upstream-Model"] = ollamaUpstreamModel;
+            ctx.Response.Headers["X-Proxy-Provider"] = ollamaProvider.Name;
 
             using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(ollamaEffectiveModel, ct);
             CancellationToken ollamaCt = ollamaTimeoutCts?.Token ?? ct;

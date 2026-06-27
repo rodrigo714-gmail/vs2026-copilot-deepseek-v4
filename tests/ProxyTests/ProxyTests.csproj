@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\vs2026-copilot-deepseek-v4.csproj" />
+    <ProjectReference Include="..\..\ai-proxy-hub.csproj" />
   </ItemGroup>
 
   <ItemGroup>

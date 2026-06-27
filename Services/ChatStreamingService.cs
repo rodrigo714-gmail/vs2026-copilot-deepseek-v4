@@ -12,93 +12,116 @@ internal sealed class ChatStreamingService
 
     internal async Task StreamAndCache(HttpResponseMessage upstream, HttpResponse downstream, CancellationToken ct)
     {
-        using Stream upstreamStream = await upstream.Content.ReadAsStreamAsync(ct);
-        using StreamReader reader = new(upstreamStream);
-        await using StreamWriter writer = new(downstream.Body, leaveOpen: true) { NewLine = "\n" };
-
-        StringBuilder sb = new(4096);
-        List<string>? tcIds = null;
-        bool hasTc = false;
-        string? assistantKey = null;
-
-        while (true)
+        try
         {
-            string? line = await reader.ReadLineAsync(ct);
-            if (line == null) break;
+            using Stream upstreamStream = await upstream.Content.ReadAsStreamAsync(ct);
+            using StreamReader reader = new(upstreamStream);
+            await using StreamWriter writer = new(downstream.Body, leaveOpen: true) { NewLine = "\n" };
 
-            if (line.StartsWith("data:"))
+            StringBuilder sb = new(4096);
+            List<string>? tcIds = null;
+            bool hasTc = false;
+            string? assistantKey = null;
+            bool receivedData = false;
+
+            while (true)
             {
-                string json = line.Substring(5).TrimStart();
-                if (json.Length > 0 && json != "[DONE]")
+                string? line;
+                try
                 {
-                    try
+                    line = await reader.ReadLineAsync(ct);
+                }
+                catch (HttpIOException) when (receivedData)
+                {
+                    // Upstream closed the connection after we already sent data.
+                    // This is a normal end of stream — break gracefully.
+                    break;
+                }
+
+                if (line == null) break;
+                receivedData = true;
+
+                if (line.StartsWith("data:"))
+                {
+                    string json = line.Substring(5).TrimStart();
+                    if (json.Length > 0 && json != "[DONE]")
                     {
-                        using JsonDocument chunk = JsonDocument.Parse(json);
-                        JsonElement cr = chunk.RootElement;
-                        if (cr.TryGetProperty("choices", out JsonElement choices) && choices.GetArrayLength() > 0)
+                        try
                         {
-                            JsonElement delta = choices[0].TryGetProperty("delta", out JsonElement d) ? d
-                                : choices[0].TryGetProperty("message", out JsonElement mm) ? mm : default;
-
-                            if (delta.ValueKind != JsonValueKind.Undefined)
+                            using JsonDocument chunk = JsonDocument.Parse(json);
+                            JsonElement cr = chunk.RootElement;
+                            if (cr.TryGetProperty("choices", out JsonElement choices) && choices.GetArrayLength() > 0)
                             {
-                                if (delta.TryGetProperty("reasoning_content", out JsonElement rc) && rc.ValueKind == JsonValueKind.String)
-                                {
-                                    string? rct = rc.GetString();
-                                    if (!string.IsNullOrEmpty(rct)) sb.Append(rct);
-                                }
+                                JsonElement delta = choices[0].TryGetProperty("delta", out JsonElement d) ? d
+                                    : choices[0].TryGetProperty("message", out JsonElement mm) ? mm : default;
 
-                                if (delta.TryGetProperty("tool_calls", out JsonElement tcs) && tcs.ValueKind == JsonValueKind.Array)
+                                if (delta.ValueKind != JsonValueKind.Undefined)
                                 {
-                                    hasTc = true;
-                                    foreach (JsonElement tc in tcs.EnumerateArray())
+                                    if (delta.TryGetProperty("reasoning_content", out JsonElement rc) && rc.ValueKind == JsonValueKind.String)
                                     {
-                                        if (tc.TryGetProperty("id", out JsonElement idE) && idE.ValueKind == JsonValueKind.String)
+                                        string? rct = rc.GetString();
+                                        if (!string.IsNullOrEmpty(rct)) sb.Append(rct);
+                                    }
+
+                                    if (delta.TryGetProperty("tool_calls", out JsonElement tcs) && tcs.ValueKind == JsonValueKind.Array)
+                                    {
+                                        hasTc = true;
+                                        foreach (JsonElement tc in tcs.EnumerateArray())
                                         {
-                                            tcIds ??= [];
-                                            string id = idE.GetString()!;
-                                            if (!tcIds.Contains(id)) tcIds.Add(id);
+                                            if (tc.TryGetProperty("id", out JsonElement idE) && idE.ValueKind == JsonValueKind.String)
+                                            {
+                                                tcIds ??= [];
+                                                string id = idE.GetString()!;
+                                                if (!tcIds.Contains(id)) tcIds.Add(id);
+                                            }
                                         }
                                     }
-                                }
 
-                                if (choices[0].TryGetProperty("finish_reason", out JsonElement fr) && fr.ValueKind != JsonValueKind.Null)
-                                {
-                                    string reasoning = sb.ToString();
-                                    if (!string.IsNullOrEmpty(reasoning))
+                                    if (choices[0].TryGetProperty("finish_reason", out JsonElement fr) && fr.ValueKind != JsonValueKind.Null)
                                     {
-                                        string key;
-                                        if (hasTc && tcIds != null && tcIds.Count > 0)
-                                            key = $"toolcall:{string.Join("|", tcIds)}";
-                                        else
-                                            key = assistantKey ??= _reasoningCacheService.NextAssistantKey();
+                                        string reasoning = sb.ToString();
+                                        if (!string.IsNullOrEmpty(reasoning))
+                                        {
+                                            string key;
+                                            if (hasTc && tcIds != null && tcIds.Count > 0)
+                                                key = $"toolcall:{string.Join("|", tcIds)}";
+                                            else
+                                                key = assistantKey ??= _reasoningCacheService.NextAssistantKey();
 
-                                        _reasoningCacheService.Set(key, reasoning);
+                                            _reasoningCacheService.Set(key, reasoning);
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    catch
-                    {
-                        // parse errors are non-critical
-                    }
+                        catch
+                        {
+                            // parse errors are non-critical
+                        }
 
-                    await writer.WriteAsync("data: ");
-                    await writer.WriteAsync(json);
-                    await writer.WriteLineAsync();
+                        await writer.WriteAsync("data: ");
+                        await writer.WriteAsync(json);
+                        await writer.WriteLineAsync();
+                    }
+                    else
+                    {
+                        await writer.WriteLineAsync(line);
+                    }
                 }
                 else
                 {
                     await writer.WriteLineAsync(line);
                 }
-            }
-            else
-            {
-                await writer.WriteLineAsync(line);
-            }
 
-            await writer.FlushAsync(ct);
+                await writer.FlushAsync(ct);
+            }
+        }
+        catch (HttpIOException)
+        {
+            // Upstream connection dropped before any data was received.
+            // The 200 header was already sent to the client, so we cannot switch
+            // to a JSON error response. Simply end the stream — the client will
+            // see an incomplete response and will retry automatically.
         }
     }
 

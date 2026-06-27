@@ -20,7 +20,7 @@
     {
       "match": "deepseek-coder-6.7b-instruct",
       "priority": 2,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 128000,
         "max_output_tokens": 8192,
@@ -37,7 +37,7 @@
     {
       "match": "deepseek-v4-flash",
       "priority": 3,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 131072,

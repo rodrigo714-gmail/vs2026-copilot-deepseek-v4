@@ -363,9 +363,12 @@ Response:
     "gpt-5",
     "qwen/qwen3-coder-480b-a35b-instruct",
     "kimi-k2.6",
-    "zai-glm-4.7",
+"zai-glm-4.7",
     "qwen3-coder:480b",
-    "... (5 enabled per provider, ~40 total)"
+    "kimi2.7-code",
+    "glm-5.2",
+    "minimax-m3",
+    "... (up to 9 enabled per provider, ~45 total)"
   ],
   "defaultModel": "deepseek-v4-pro"
 }

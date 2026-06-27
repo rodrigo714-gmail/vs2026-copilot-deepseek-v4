@@ -17,12 +17,13 @@ internal sealed class ProviderHttpClientFactory
 
     private static SocketsHttpHandler NewDefaultHandler() => new()
     {
-        EnableMultipleHttp2Connections = true,
+        // HTTP/2 with SSE streaming can cause premature connection termination.
+        // Prefer HTTP/1.1 which handles long-lived streaming connections more reliably.
         MaxConnectionsPerServer = 256,
-        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
-        KeepAlivePingDelay = TimeSpan.FromSeconds(30),
-        KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(120),
+        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
         AutomaticDecompression = DecompressionMethods.None,
         UseCookies = false,
         PreAuthenticate = false

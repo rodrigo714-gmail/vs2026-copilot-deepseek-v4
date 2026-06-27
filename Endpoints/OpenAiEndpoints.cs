@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -125,6 +126,16 @@ internal static class OpenAiEndpoints
                 candidates = providerRegistry.ResolveCandidates(effectiveModel);
             }
 
+            // ── Diagnostic headers ───────────────────────────────────────
+            ctx.Response.Headers["X-Proxy-Requested-Model"] = reqModel;
+            ctx.Response.Headers["X-Proxy-Resolved-Model"] = effectiveModel;
+            ctx.Response.Headers["X-Proxy-Candidate-Count"] = candidates.Count.ToString();
+            if (candidates.Count > 0)
+            {
+                ctx.Response.Headers["X-Proxy-Primary-Provider"] = candidates[0].Provider.Name;
+                ctx.Response.Headers["X-Proxy-Primary-Upstream"] = candidates[0].UpstreamModel;
+            }
+
             string? modifiedRequest = requestTransformer.ModifyRequest(doc);
 
             using CancellationTokenSource? timeoutCts = modelCatalog.CreateModelTimeoutCts(effectiveModel, ct);
@@ -215,7 +226,9 @@ internal static class OpenAiEndpoints
             using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
             using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath)
             {
-                Content = reqContent
+                Content = reqContent,
+                Version = HttpVersion.Version11,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
             upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
@@ -391,10 +404,78 @@ internal static class OpenAiEndpoints
         writer.WriteString("model", model);
         writer.WriteBoolean("stream", isStream);
 
+        // ── Messages ──
+        // Convert OpenAI multi-part content (text + image_url parts) into Ollama format:
+        //   - text parts → "content" string
+        //   - image_url parts → "images" array of base64 data URLs
         if (root.TryGetProperty("messages", out JsonElement messages))
         {
             writer.WritePropertyName("messages");
-            messages.WriteTo(writer);
+            writer.WriteStartArray();
+
+            foreach (JsonElement msg in messages.EnumerateArray())
+            {
+                writer.WriteStartObject();
+
+                bool hasMultiPartContent = false;
+                List<string> imageUrls = [];
+
+                // Determine if content is multi-part array with images
+                if (msg.TryGetProperty("content", out JsonElement content) && content.ValueKind == JsonValueKind.Array)
+                {
+                    hasMultiPartContent = true;
+                    StringBuilder textContent = new();
+
+                    foreach (JsonElement part in content.EnumerateArray())
+                    {
+                        if (part.TryGetProperty("type", out JsonElement type) && type.GetString() == "text")
+                        {
+                            if (part.TryGetProperty("text", out JsonElement text) && text.ValueKind == JsonValueKind.String)
+                            {
+                                if (textContent.Length > 0)
+                                    textContent.Append('\n');
+                                textContent.Append(text.GetString());
+                            }
+                        }
+                        else if (type.GetString() == "image_url")
+                        {
+                            if (part.TryGetProperty("image_url", out JsonElement imgUrl) && imgUrl.ValueKind == JsonValueKind.Object)
+                            {
+                                if (imgUrl.TryGetProperty("url", out JsonElement url) && url.ValueKind == JsonValueKind.String)
+                                {
+                                    imageUrls.Add(url.GetString()!);
+                                }
+                            }
+                        }
+                    }
+
+                    writer.WriteString("content", textContent.ToString());
+                }
+
+                // Copy remaining properties (role, tool_calls, etc.) but skip content if already written
+                foreach (JsonProperty mp in msg.EnumerateObject())
+                {
+                    if (mp.NameEquals("content") && hasMultiPartContent)
+                        continue; // already written
+                    mp.WriteTo(writer);
+                }
+
+                // Write images array if any image_url parts were found
+                if (imageUrls.Count > 0)
+                {
+                    writer.WritePropertyName("images");
+                    writer.WriteStartArray();
+                    foreach (string imgUrl in imageUrls)
+                    {
+                        writer.WriteStringValue(imgUrl);
+                    }
+                    writer.WriteEndArray();
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
         }
 
         if (root.TryGetProperty("tools", out JsonElement tools))

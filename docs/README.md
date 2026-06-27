@@ -1,30 +1,32 @@
 # Multi-Provider AI Proxy
 
-> The fastest way to run DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, and Ollama models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
+> The fastest way to run DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
 
-**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 329 tests passing
+**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 336 tests passing
 
-A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, and Ollama Cloud** APIs. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
+A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **9 AI providers**: DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama Cloud. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
 | 🏗️ | Details |
 |---|---|
-| **Providers** | DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras |
-| **Models** | Auto-discovered from each provider; curated to **5 enabled per provider** for coding |
+| **Providers** | DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux |
+| **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
-| **Tests** | 329 passing ✅ |
+| **Tests** | 336 passing ✅ |
 | **Deploy** | Docker / bare metal |
 
 ## Key Features
 
 - **🧠 Reasoning Content Caching** — Automatically captures DeepSeek's `reasoning_content` and re-injects it on subsequent messages for true multi-turn reasoning
-- **🌐 Multi-Provider Support (8 providers)** — Route requests to DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, or Cerebras based on model name
+- **🌐 Multi-Provider Support (9 providers)** — Route requests to any provider based on model name
 - **🔄 Dual API Compatibility**
   - **OpenAI-compatible** (`/v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, any OpenAI SDK
   - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
 - **🛡️ Force-mode parameter override** — `override_client_params: true` in model JSON force-overwrites client values for models with hard requirements (e.g. Moonshot Kimi K2.x mandates `temperature=1.0`)
 - **🎯 3-level `provider/model` hint resolution** — `nvidia/qwen3.5-397b-a17b` correctly resolves to NVIDIA's family-prefixed upstream id `qwen/qwen3.5-397b-a17b`
-- **📋 Curated model roster** — Top 5 coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026
+- **📋 Curated model roster** — Top coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026
+- **🖼️ Vision & Image Support** — Multi-part image content is automatically converted between OpenAI and Ollama formats for vision-capable models (e.g. kimi-k2.7-code-free, qwen3.7-plus)
+- **🔍 Diagnostic Response Headers** — Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, and `X-Proxy-Provider` for debugging routing decisions
 - **⚡ Ultra-Performance** — HTTP/2 connection pooling (256 connections/server), zero-copy streaming, minimal allocations
 - **📦 Zero-Copy Streaming** — SSE pass-through without buffering
 - **🔧 No External Dependencies** — Uses only built-in ASP.NET Core and System.Text.Json
@@ -56,6 +58,7 @@ PROVIDER_OPENROUTER_API_KEY=sk-or-...
 PROVIDER_OLLAMACLOUD_API_KEY=...
 PROVIDER_MOONSHOT_API_KEY=sk-...
 PROVIDER_CEREBRAS_API_KEY=csk-...
+PROVIDER_ZENMUX_API_KEY=your-zenmux-key-here
 
 PROXY_PORT=11434                    # (optional)
 DEFAULT_MODEL=deepseek-v4-pro       # (optional)
@@ -75,7 +78,7 @@ docker compose up -d
 dotnet run
 ```
 
-You should see startup output listing the 8 providers (whichever have keys) and ~40 curated models.
+You should see startup output listing the 9 providers (whichever have keys) and ~60 curated models.
 
 ## API Reference
 
@@ -91,11 +94,25 @@ GET  /health                             # Health check + provider summary
 
 ```
 GET  /api/version                        # Version info
-GET  /api/tags                           # List models (Ollama format)
+GET  /api/tags                           # List models (Ollama format, qualified aliases)
 GET  /api/show?model=...                 # Model details
 POST /api/show                           # Model details
 POST /api/chat                           # Chat (Ollama format; NDJSON streaming)
 ```
+
+### Diagnostic Response Headers
+
+Every chat completion response includes diagnostic headers to verify routing:
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-Proxy-Requested-Model` | The model name the client sent | `deepseek-v4-pro:latest` |
+| `X-Proxy-Resolved-Model` | The resolved internal model id | `deepseek-v4-pro` |
+| `X-Proxy-Upstream-Model` | The model id sent to the upstream API | `deepseek-v4-pro` |
+| `X-Proxy-Provider` | The provider that handled the request | `deepseek`, `ollama`, `zenmux` |
+| `X-Proxy-Candidate-Count` | Number of failover candidates (OpenAI endpoint) | `1`, `3` |
+| `X-Proxy-Primary-Provider` | Primary provider candidate (OpenAI endpoint) | `nvidia` |
+| `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint) | `qwen/qwen3.5-397b-a17b` |
 
 **[→ Full API Documentation](docs/API.md)**
 
@@ -125,11 +142,12 @@ http://localhost:11434/api/chat
 ```
 
 Top picks for coding in VS 2026:
-- `qwen3-coder:480b` (Ollama Cloud) — 1.5T Qwen coder, native tool support
-- `qwen/qwen3-coder-480b-a35b-instruct` (NVIDIA NIM) — same model on NIM with 1M context
-- `kimi-k2.6` (Moonshot) — 256K context, force-mode `temperature=1.0`
-- `gpt-5` (OpenAI) — best general reasoning
-- `gpt-oss-120b` (Cerebras / OpenAI / NVIDIA / Groq) — open-weights reasoning
+- `kimi2.7-code` (Ollama Cloud) — 🥇 Kimi 2.7 code-specialized, 262K context, force-mode
+- `glm-5.2` (Ollama Cloud) — 🥈 GLM 5.2 latest, 1M context, strong reasoning
+- `qwen3-coder:480b` (Ollama Cloud) — 1.5T Qwen coder, 1M context, native tools
+- `deepseek-v4-pro` (Ollama Cloud) — DeepSeek V4 Pro, 1M context, reasoning
+- `glm-5.2-free` (ZenMux) — 🆓 1M context, gratis
+- `kimi-k2.7-code-free` (ZenMux) — 🆓 262K, visión, reasoning, gratis
 
 ### Continue.dev / Cursor
 
@@ -152,7 +170,6 @@ Top picks for coding in VS 2026:
 - **[TESTING.md](docs/TESTING.md)** — Test architecture, running tests, adding new tests
 - **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Docker, Kubernetes, monitoring, troubleshooting
 - **[AGENTS.md](docs/AGENTS.md)** — Quick reference for AI assistants (Copilot, Claude, etc.)
-- **[CLAUDE.md](CLAUDE.md)** — Claude Code session memory + hard constraints
 
 ## Performance
 
@@ -160,7 +177,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 329 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution
+- **Test coverage:** 336 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution
 
 ## Testing
 
@@ -195,11 +212,11 @@ Some models have hard requirements that contradict the user's request. The proxy
 - **Default (`false` / absent):** the proxy only injects defaults for missing fields. Client-supplied values win.
 - **Force mode (`true`):** the proxy **overwrites** client-supplied values for `temperature`, `top_p`, `max_tokens`, `reasoning_effort` with the configured value.
 
-The canonical use case is Moonshot Kimi K2.5 / K2.6 which reject any `temperature ≠ 1.0`. With `override_client_params: true` and `temperature: 1.0` in `moonshot.json`, the proxy silently corrects the client's value before forwarding. See `OverrideClientParamsTests.cs` for the test suite.
+The canonical use case is Moonshot Kimi K2.7-code, K2.6, and K2.5 (including via ZenMux) which reject any `temperature ≠ 1.0`. With `override_client_params: true` and `temperature: 1.0`, the proxy silently corrects the client's value before forwarding. See `OverrideClientParamsTests.cs` for the test suite.
 
 ## Provider Support
 
-Each provider exposes a curated set of **5 enabled models** (max), prioritised for coding. The full per-provider roster is in `config/model-selection/*.json`.
+Each provider exposes a curated set of enabled models, prioritised for coding.
 
 | Provider | # enabled | Top picks | Notes |
 |----------|----------:|-----------|-------|
@@ -207,10 +224,11 @@ Each provider exposes a curated set of **5 enabled models** (max), prioritised f
 | **OpenAI** | 5 | gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b | o-series support |
 | **NVIDIA NIM** | 5 | qwen3-coder-480b, kimi-k2.6, nemotron-3-super, gpt-oss-120b, qwen3.5-397b | 1M context, all top coding picks |
 | **Groq** | 5 | llama-3.3-70b-versatile, qwen3-32b, llama-4-scout, gpt-oss-120b, gpt-oss-20b | Speed-optimised inference |
-| **OpenRouter** | 5 | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro | Multi-backend passthrough |
-| **Moonshot/Kimi** | 5 | kimi-k2.6, kimi-k2.5, moonshot-v1-{128k,auto,32k} | Kimi K2.x forces `temperature=1.0` |
+| **OpenRouter** | 7 | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro | Multi-backend passthrough |
+| **Moonshot/Kimi** | 6 | kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1-* | Kimi K2.x forces `temperature=1.0` |
 | **Cerebras** | 2 | zai-glm-4.7, gpt-oss-120b | Small curated set |
-| **Ollama Cloud** | 5 | qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro | Quantised open models |
+| **Ollama Cloud** | 10 | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, deepseek-v4-pro | Podio + 1M context GLM/Minimax/Qwen |
+| **ZenMux** | 2 **(free tier)** | **glm-5.2-free 🆓**, **kimi-k2.7-code-free 🆓** | Multi-model aggregator, more models can be enabled in config |
 
 **[→ Configuration Guide](docs/CONFIGURATION.md#context-window-specifications)**
 
@@ -223,8 +241,9 @@ Proxy (localhost:11434)
   ├─ Parameter filtering (RequestTransformer, with override_client_params force-mode)
   ├─ Model routing (ProviderRegistry; 3-level provider/model hint resolution)
   ├─ Reasoning caching (ReasoningCacheService)
-  ├─ Format conversion (OpenAI ↔ Ollama)
-  └─ Streaming handler (ChatStreamingService)
+  ├─ Format conversion (OpenAI ↔ Ollama, including image multi-part conversion)
+  ├─ Streaming handler (ChatStreamingService)
+  └─ Diagnostic headers (X-Proxy-*)
     ↓
 Upstream Providers
   ├─ DeepSeek API
@@ -234,6 +253,7 @@ Upstream Providers
   ├─ OpenRouter API
   ├─ Moonshot/Kimi API
   ├─ Cerebras API
+  ├─ ZenMux API
   └─ Ollama Cloud API
 ```
 
@@ -249,4 +269,3 @@ For issues, questions, or contributions:
 - Check **[AGENTS.md](docs/AGENTS.md)** for quick reference
 - Review **[TESTING.md](docs/TESTING.md)** for test architecture
 - See **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** for design details
-- Read **[CLAUDE.md](CLAUDE.md)** for the project-grounded Claude session rules
