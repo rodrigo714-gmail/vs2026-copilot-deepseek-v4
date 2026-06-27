@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang=es><head><meta charset=UTF-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Proxy Dashboard</title>
+<style>
+body{font:14px -apple-system,sans-serif;margin:0;padding:16px;background:#f4f4f4;color:#333}
+h1{border-bottom:2px solid #06c;padding-bottom:8px;font-size:20px}h2{color:#444;margin-top:18px;font-size:15px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin:8px 0}
+.card{background:#fff;border-radius:8px;padding:10px;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+.card h3{margin:0 0 3px;font-size:10px;color:#888}.card .value{font-size:16px;font-weight:bold}
+.green{color:#22c55e}.red{color:#ef4444}.blue{color:#3b82f6}.orange{color:#f59e0b}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,.1);margin:6px 0}
+th,td{padding:5px 7px;text-align:left;border-bottom:1px solid #eee;font-size:10px}
+th{background:#1a1a1a;color:#fff;font-size:9px;text-transform:uppercase}
+tr:hover{background:#f0f7ff}.tag{display:inline-block;padding:1px 5px;border-radius:6px;font-size:8px;font-weight:bold}
+.free{color:#22c55e;font-weight:bold}.paid{color:#f59e0b;font-weight:bold}.premium{color:#ef4444;font-weight:bold}
+.elo{background:#e8f4e8;color:#166534;padding:1px 4px;border-radius:3px;font-size:9px}
+.badge{display:inline-block;padding:1px 4px;border-radius:3px;font-size:9px;background:#e2e8f0}
+.nav{display:flex;gap:5px;margin:8px 0;flex-wrap:wrap}
+<span id=lu style=font-size:9px;color:#ccc></span>
+<script>
+async function L(){try{var r=await fetch('/usage');var d=await r.json();var pr=await fetch('/usage/pricing');var p=await pr.json();R(d,p.pricing)}catch(e){c.innerHTML='Error cargando'}}
+function R(d,p){var tr=d.models.reduce((s,m)=>s+m.requests,0);var tc=d.total_cost_usd;var tt=d.models.reduce((s,m)=>s+m.tokens_in+m.tokens_out,0);var ac=d.models.filter(m=>m.requests>0).length;var al=d.models.filter(m=>m.requests>0&&m.success_rate_pct>0).reduce((s,m,i,a)=>s+m.latency_avg_ms/a.length,0)||0;var rh=d.uptime_hours>0?tr/d.uptime_hours:0;
+var h='<div class=stats>'+card('Uptime',d.uptime_hours.toFixed(1),'blue')+card('Requests',tr,'blue')+card('Costo','$'+tc.toFixed(4),tc>0.01?'orange':'green')+card('Latencia',Math.round(al)+'ms','blue')+card('Tokens',Math.round(tt/1000)+'K','blue')+card('Modelos',ac,'blue')+card('Req/h',Math.round(rh),'blue')+'</div>';
+h+='<h2>KPIs para Developers</h2><div class=kpi-grid>';
+h+=kpi('<b>Mejor ROI (ELO/$)</b><br>',p.filter(x=>x.output_per_m>0&&x.arena_elo).sort((a,b)=>(b.arena_elo/b.output_per_m)-(a.arena_elo/a.output_per_m)).slice(0,4).map(x=>x.provider+'/'+x.model+' <span class=elo>ELO '+x.arena_elo+'</span> $'+x.output_per_m+'/M').join('<br>'));
+h+=kpi('<b>Mas rapidos</b><br>',p.sort((a,b)=>(b.estimated_tps||0)-(a.estimated_tps||0)).slice(0,4).map(x=>x.provider+'/'+x.model+' <span class=badge>'+(x.estimated_tps||'-')+' TPS</span>').join('<br>'));
+h+=kpi('<b>GRATIS</b><br>',p.filter(x=>x.tier==='free').map(x=>x.provider+'/'+x.model+' <span class="tag free">free</span>').join('<br>'));
+h+=kpi('<b>1000 reqs coding</b><br>',p.filter(x=>x.tier!=='free').map(x=>({...x,c:1000*((5000/1e6)*x.input_per_m+(1000/1e6)*x.output_per_m)})).sort((a,b)=>a.c-b.c).slice(0,4).map(x=>x.provider+'/'+x.model+' <b>$'+x.c.toFixed(1)+'</b> <span class=badge>$'+x.output_per_m+'/M</span>').join('<br>'));
+h+='</div><h2>Uso en Vivo</h2>';
+if(d.models.length>0){h+='<table><thead><tr><th>Prov</th><th>Modelo</th><th>Tier</th><th>Req</th><th>OK%</th><th>Lat</th><th>In</th><th>Out</th><th>Costo</th><th>ELO</th></tr></thead><tbody>';
+d.models.sort((a,b)=>b.cost_usd-a.cost_usd).forEach(m=>{h+=`<tr><td>${m.provider}</td><td><b>${m.model}</b></td><td><span class=tag ${m.tier}>${m.tier}</span></td><td>${m.requests}</td><td>${m.success_rate_pct}%</td><td>${m.latency_avg_ms>0?Math.round(m.latency_avg_ms)+'ms':'-'}</td><td>${Math.round(m.tokens_in/1000)}K</td><td>${Math.round(m.tokens_out/1000)}K</td><td>${m.cost_usd>0?'$'+m.cost_usd.toFixed(6):'$0'}</td><td>${m.arena?.elo?'<span class=elo>ELO '+m.arena.elo+'</span>':'-'}</td></tr>`});h+='</tbody></table>'}else{h+='<div style=text-align:center;padding:25px;color:#999>Sin requests. Hace POST /v1/chat/completions.</div>'}
+h+='<p style=color:#999;font-size:10px;margin-top:15px>Proxy v2026.06.27 · <a href=# onclick="fetch(\'/usage/reset\',{method:\'POST\'}).then(()=>location.reload())" style=color:#ef4444>Reset</a></p>';
+c.innerHTML=h;lu.textContent='Actualizado: '+new Date().toLocaleTimeString()}
+function card(l,v,co){return `<div class=card><h3>${l}</h3><div class="value ${co}">${v}</div></div>`}
+function kpi(t,h){return `<div class=kpi>${t}${h}</div>`}
+L();setInterval(L,5000);
+</script></body></html>
+
+.nav a{padding:4px 9px;background:#fff;border-radius:5px;text-decoration:none;color:#06c;font-size:11px;box-shadow:0 1px 2px rgba(0,0,0,.1)}.nav a:hover{background:#06c;color:#fff}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;margin:6px 0}
+.kpi{background:#fff;padding:7px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:10px;line-height:1.5}.kpi strong{color:#06c}
+.refresh{font-size:9px;color:#999}
+</style></head><body>
+<h1>🤖 AI Proxy Dashboard <span class=refresh>🔄 auto-refresh 5s</span></h1>
+<div class=nav><a href=/>Dash</a><a href=/usage>JSON</a><a href=/usage/pricing>💰 Catálogo Precios</a><a href=/health>Health</a></div>
+<div id=c style=text-align:center;padding:30px;color:#999>⏳ Cargando...</div>
