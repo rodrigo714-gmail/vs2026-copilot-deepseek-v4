@@ -53,6 +53,7 @@ await modelCatalog.RefreshAvailableModels(CancellationToken.None);
 
 app.MapOpenAiEndpoints();
 app.MapUsageEndpoints();
+app.MapDashboardEndpoints();
 app.MapOllamaEndpoints();
 app.MapHealthEndpoints();
 
