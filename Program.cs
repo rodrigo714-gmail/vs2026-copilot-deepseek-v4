@@ -38,6 +38,8 @@ builder.Services.AddSingleton<ModelCatalogService>();
 builder.Services.AddSingleton<ReasoningCacheService>();
 builder.Services.AddSingleton<RequestTransformer>();
 builder.Services.AddSingleton<OllamaResponseBuilder>();
+builder.Services.AddSingleton<UsageTracker>();
+builder.Services.AddSingleton<ProxyLogger>();
 builder.Services.AddSingleton<ChatStreamingService>();
 
 builder.Services.AddHostedService<ProviderBenchmarkService>();
@@ -50,13 +52,15 @@ ProviderRegistry providerRegistry = app.Services.GetRequiredService<ProviderRegi
 await modelCatalog.RefreshAvailableModels(CancellationToken.None);
 
 app.MapOpenAiEndpoints();
+app.MapUsageEndpoints();
+app.MapDashboardEndpoints();
 app.MapOllamaEndpoints();
 app.MapHealthEndpoints();
 
 Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
 Console.WriteLine($"║   DeepSeek / Multi-Provider Copilot Proxy (Ultra)               ║");
 Console.WriteLine($"╠══════════════════════════════════════════════════════════════════╣");
-Console.WriteLine($"║  Version: 2026.06.02                                             ║");
+Console.WriteLine($"║  Version: 2026.06.27                                             ║");
 Console.WriteLine($"║  Default: {providerRegistry.DefaultModel,-32}                                  ║");
 Console.WriteLine($"║  Providers: {string.Join(", ", providerRegistry.Providers.Select(pv => pv.Name)),-32}                          ║");
 Console.WriteLine($"║  Models:   {string.Join(", ", modelCatalog.AvailableModels),-32}                          ║");
