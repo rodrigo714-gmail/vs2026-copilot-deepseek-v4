@@ -269,7 +269,6 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
@@ -284,7 +283,6 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     public void Moonshot_Models_TemperatureInjected(string model)
     {
@@ -297,9 +295,6 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("kimi-k2.7-code")]
-    [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-32k")]
     public void Moonshot_Models_TopPInjected(string model)
@@ -424,21 +419,20 @@ public class ParameterValidationTests
     [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
     [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
     [InlineData("openai/gpt-oss-20b",         131_072, 65_536)]
-    [InlineData("kimi-k2.7-code",            262_144, 262_144)]
-    [InlineData("kimi-k2.5",          262_144, 262_144)]
-    [InlineData("moonshot-v1-128k",   131_072,  32_768)]
-    [InlineData("moonshot-v1-auto",   131_072,  32_768)]
-    [InlineData("moonshot-v1-32k",     32_768,   8_192)]
+    [InlineData("kimi-k2.7-code",            262_144, 131_072)]
+    [InlineData("kimi-k2.6",                 262_144, 131_072)]
+    [InlineData("moonshot-v1-128k",          131_072,  32_768)]
+    [InlineData("moonshot-v1-auto",          131_072,  32_768)]
+    [InlineData("moonshot-v1-32k",            32_768,   8_192)]
     [InlineData("qwen/qwen3-coder",                  1_048_576, 262_000)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000,  16_384)]
     [InlineData("nvidia/nemotron-3-ultra-550b-a55b", 1_000_000, 262_144)]
     [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
     [InlineData("zai-glm-4.7",  128_000, 32_768)]
     [InlineData("gpt-oss-120b", 131_072, 65_536)]
-    [InlineData("qwen3-coder:480b",  1_000_000, 32_768)]
-    [InlineData("qwen3-coder-next",  1_000_000, 32_768)]
-    [InlineData("devstral-2:123b",   128_000, 32_768)]
-    [InlineData("kimi-k2.6",         262_144, 262_144)]
+    [InlineData("qwen3-coder:480b",    128_000, 32_768)]
+    [InlineData("qwen3-coder-next",    128_000, 32_768)]
+    [InlineData("devstral-2:123b",     128_000, 32_768)]
     public void AllModels_HaveCorrectContextWindowConfig(
         string model, int expectedContextLength, int minMaxOutput)
     {
@@ -500,7 +494,6 @@ public class ParameterValidationTests
     [InlineData("deepseek/deepseek-v4-pro", "openrouter")]
     [InlineData("kimi-k2.7-code", "moonshot")]
     [InlineData("kimi-k2.6",    "moonshot")]
-    [InlineData("kimi-k2.5",    "moonshot")]
     [InlineData("moonshot-v1-128k", "moonshot")]
     [InlineData("moonshot-v1-32k",  "moonshot")]
     [InlineData("zai-glm-4.7", "cerebras")]
@@ -548,9 +541,9 @@ public class ParameterValidationTests
     [InlineData("nvidia", 5)]
     [InlineData("groq", 5)]
     [InlineData("openrouter", 7)]     // qwen3.7-plus, qwen3-coder, nemotron-super, nemotron-ultra, kimi-k2.7-code, deepseek-v4-pro, kimi-k2.6
-    [InlineData("moonshot", 6)]      // kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1-128k, moonshot-v1-auto, moonshot-v1-32k
+    [InlineData("moonshot", 5)]      // kimi-k2.7-code, kimi-k2.6, moonshot-v1-128k, moonshot-v1-auto, moonshot-v1-32k  (kimi-k2.5 disabled)
     [InlineData("cerebras", 2)]
-    [InlineData("ollama", 10)]        // 9 ollamacloud + 1 ollama.json (mistral)
+    [InlineData("ollama", 9)]        // 8 ollamacloud + 1 ollama.json (mistral)
     [InlineData("ollamacloud", 10)]  // 7 enabled + disabled
     [InlineData("zenmux", 20)]     // All 20 entries enabled (multi-provider aggregator)
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
