@@ -252,9 +252,7 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("kimi-k2.7-code")]
     [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
-    [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
     public void Moonshot_Models_MaxTokensInjected(string model)
     {
@@ -267,8 +265,6 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("kimi-k2.7-code")]
-    [InlineData("kimi-k2.6")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
@@ -541,7 +537,7 @@ public class ParameterValidationTests
     [InlineData("nvidia", 5)]
     [InlineData("groq", 5)]
     [InlineData("openrouter", 7)]     // qwen3.7-plus, qwen3-coder, nemotron-super, nemotron-ultra, kimi-k2.7-code, deepseek-v4-pro, kimi-k2.6
-    [InlineData("moonshot", 5)]      // kimi-k2.7-code, kimi-k2.6, moonshot-v1-128k, moonshot-v1-auto, moonshot-v1-32k  (kimi-k2.5 disabled)
+    [InlineData("moonshot", 4)]      // kimi-k2.7-code, kimi-k2.6, moonshot-v1-128k, moonshot-v1-32k  (kimi-k2.5 disabled, moonshot-v1-auto removed)
     [InlineData("cerebras", 2)]
     [InlineData("ollama", 9)]        // 8 ollamacloud + 1 ollama.json (mistral)
     [InlineData("ollamacloud", 10)]  // 7 enabled + disabled
