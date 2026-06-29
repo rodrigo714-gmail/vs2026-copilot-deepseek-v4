@@ -157,9 +157,19 @@ internal static class OllamaEndpoints
 
             string ollamaRequestedModel = root.TryGetProperty("model", out JsonElement om) && om.ValueKind == JsonValueKind.String
                 ? om.GetString()! : providerRegistry.DefaultModel;
+
+            // ── Detailed routing log ──────────────────────────────────────
+            Console.WriteLine($"[ROUTE] Received model='{ollamaRequestedModel}' stream={isStream}");
+
             string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
+            Console.WriteLine($"[ROUTE] Resolved model='{ollamaEffectiveModel}'");
+
             string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
+            Console.WriteLine($"[ROUTE] Upstream model='{ollamaUpstreamModel}'");
+
             ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
+            Console.WriteLine($"[ROUTE] Provider='{ollamaProvider.Name}' BaseUrl='{ollamaProvider.Client.BaseAddress}' ChatPath='{ollamaProvider.Capabilities.ChatPath}'");
+
             ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
 
             // ── Diagnostic headers ───────────────────────────────────────
@@ -254,6 +264,7 @@ internal static class OllamaEndpoints
 
                 if (!resp.IsSuccessStatusCode)
                 {
+                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' HTTP={(int)resp.StatusCode} Body='{respBody}'");
                     ctx.Response.StatusCode = (int)resp.StatusCode;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(respBody, ct);
@@ -305,6 +316,7 @@ internal static class OllamaEndpoints
                 if (!upstreamResp.IsSuccessStatusCode)
                 {
                     string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
+                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' (stream) HTTP={(int)upstreamResp.StatusCode} Body='{errBody}'");
                     ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(errBody, ct);
