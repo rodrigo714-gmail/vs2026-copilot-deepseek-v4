@@ -34,8 +34,8 @@ public class OverrideClientParamsTests
         string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
-        // kimi-k2.6's configured max_tokens is 4096
-        Assert.Equal(4096, doc.RootElement.GetProperty("max_tokens").GetInt32());
+        // kimi-k2.6's configured max_tokens is 8192
+        Assert.Equal(8192, doc.RootElement.GetProperty("max_tokens").GetInt32());
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class OverrideClientParamsTests
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal(1.0, doc.RootElement.GetProperty("temperature").GetDouble());
         Assert.Equal(0.95, doc.RootElement.GetProperty("top_p").GetDouble());
-        Assert.Equal(4096, doc.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(8192, doc.RootElement.GetProperty("max_tokens").GetInt32());
     }
 
     // ── ModelExecutionConfig defaults & parsing ───────────────────────────

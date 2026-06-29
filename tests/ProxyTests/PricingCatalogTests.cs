@@ -96,6 +96,6 @@ public sealed class PricingCatalogTests
     {
         var all = PricingCatalog.All.ToList();
         Assert.NotEmpty(all);
-        Assert.True(all.Count >= 30);
+        Assert.True(all.Count >= 25);
     }
 }

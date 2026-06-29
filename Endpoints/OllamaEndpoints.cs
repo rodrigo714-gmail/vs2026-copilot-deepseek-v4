@@ -218,7 +218,7 @@ internal static class OllamaEndpoints
                 }
 
                 // Track request + rate-limit headers for streaming
-                double cost = ModelPricing.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
+                double cost = PricingCalculator.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
                 usageTracker.RecordRequest(ollamaProvider.Name, 0, 0, 0, null, sw.ElapsedMilliseconds, cost);
                 RecordOllamaRateLimitHeaders(usageTracker, ollamaProvider.Name, ollamaStreamResp.Headers, ollamaStreamResp.TrailingHeaders);
                 await chatStreaming.StreamNdjsonPassthrough(ollamaStreamResp, ctx.Response, ct);
@@ -314,7 +314,7 @@ internal static class OllamaEndpoints
                 }
 
                 // Track request + rate-limit headers for streaming Ollama→OpenAI
-                double cost = ModelPricing.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
+                double cost = PricingCalculator.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
                 usageTracker.RecordRequest(ollamaProvider.Name, 0, 0, 0, null, sw2.ElapsedMilliseconds, cost);
                 RecordOllamaRateLimitHeaders(usageTracker, ollamaProvider.Name, upstreamResp.Headers, upstreamResp.TrailingHeaders);
                 await chatStreaming.StreamOllamaAndCache(upstreamResp, ctx.Response, ollamaEffectiveModel, ct);
@@ -522,7 +522,7 @@ internal static class OllamaEndpoints
         }
         catch { }
 
-        double cost = (promptTokens > 0 || completionTokens > 0) ? ModelPricing.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        double cost = (promptTokens > 0 || completionTokens > 0) ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
         usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
     }
 
@@ -560,7 +560,7 @@ internal static class OllamaEndpoints
         }
         catch { }
 
-        double cost = hasUsage ? ModelPricing.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        double cost = hasUsage ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
         usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
     }
 

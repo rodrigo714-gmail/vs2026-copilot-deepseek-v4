@@ -4,7 +4,7 @@
 /// Sources: official provider pricing pages as of June 2026.
 /// Falls back to provider-level defaults when model not found.
 /// </summary>
-internal static class ModelPricing
+internal static class PricingCalculator
 {
     // Key: model id (lowercase). Value: (prompt_price_per_1M, completion_price_per_1M)
     private static readonly Dictionary<string, (double Prompt, double Completion)> _pricing = new(StringComparer.OrdinalIgnoreCase)

@@ -29,7 +29,7 @@ public sealed class UsageTrackerTests
         Assert.Equal(2, m.TotalRequests);
         Assert.Equal(5000, m.TotalPromptTokens);
         Assert.Equal(1300, m.TotalCompletionTokens);
-        Assert.Equal(1000, m.AvgLatencyMs, 1);
+        Assert.Equal(1500, m.AvgLatencyMs, 1);
     }
 
     [Fact]

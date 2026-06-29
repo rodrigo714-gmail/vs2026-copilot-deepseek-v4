@@ -143,7 +143,7 @@ public class RequestTransformerTests
         string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("deepseek"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
-        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
+        Assert.Equal("medium", doc.RootElement.GetProperty("reasoning_effort").GetString());
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class RequestTransformerTests
         string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", ProviderCapabilitiesRegistry.Get("openai"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
-        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
+        Assert.Equal("medium", doc.RootElement.GetProperty("reasoning_effort").GetString());
     }
 
     [Fact]

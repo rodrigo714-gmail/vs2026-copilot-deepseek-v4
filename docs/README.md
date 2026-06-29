@@ -2,7 +2,7 @@
 
 > The fastest way to run DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
 
-**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 336 tests passing
+**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 376 tests (340 + 36 integration)
 
 A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **9 AI providers**: DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama Cloud. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
@@ -12,7 +12,7 @@ A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot a
 | **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
-| **Tests** | 336 passing ✅ |
+| **Tests** | **376 tests** (340 passing + 36 integration requiring API keys) ✅ |
 | **Deploy** | Docker / bare metal |
 
 ## Key Features
@@ -22,9 +22,12 @@ A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot a
 - **🔄 Dual API Compatibility**
   - **OpenAI-compatible** (`/v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, any OpenAI SDK
   - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
+- **📊 Usage Dashboard & Billing** — Real-time SPA dashboard at `/dashboard` with Chart.js showing usage, cost, latency, billing balance, and LLM Arena performance data. REST APIs at `/api/usage` and `/api/billing`.
+- **💰 Pricing Calculator & Cost Tracking** — Automatic cost estimation per request using token counts + provider pricing. Tracked in `UsageTrackerService` per model and per provider.
 - **🛡️ Force-mode parameter override** — `override_client_params: true` in model JSON force-overwrites client values for models with hard requirements (e.g. Moonshot Kimi K2.x mandates `temperature=1.0`)
 - **🎯 3-level `provider/model` hint resolution** — `nvidia/qwen3.5-397b-a17b` correctly resolves to NVIDIA's family-prefixed upstream id `qwen/qwen3.5-397b-a17b`
-- **📋 Curated model roster** — Top coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026
+- **📋 Curated model roster** — Top coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026, with pricing data from `PricingCatalog`
+- **📈 Usage Snapshots & Projections** — Periodic snapshots for weekly/monthly cost projections via `UsageSnapshotService`
 - **🖼️ Vision & Image Support** — Multi-part image content is automatically converted between OpenAI and Ollama formats for vision-capable models (e.g. kimi-k2.7-code-free, qwen3.7-plus)
 - **🔍 Diagnostic Response Headers** — Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, and `X-Proxy-Provider` for debugging routing decisions
 - **⚡ Ultra-Performance** — HTTP/2 connection pooling (256 connections/server), zero-copy streaming, minimal allocations
@@ -100,6 +103,18 @@ POST /api/show                           # Model details
 POST /api/chat                           # Chat (Ollama format; NDJSON streaming)
 ```
 
+### Dashboard & Billing Endpoints
+
+```
+GET  /dashboard                         # Real-time usage dashboard (SPA with Chart.js)
+GET  /api/usage                         # Usage stats for all providers (JSON)
+GET  /api/usage/{provider}              # Usage stats for a single provider (JSON)
+GET  /api/billing                       # Billing info for all providers (JSON)
+GET  /api/billing/{provider}            # Billing info for a single provider (JSON)
+```
+
+**[→ Full API Documentation](docs/API.md)**
+
 ### Diagnostic Response Headers
 
 Every chat completion response includes diagnostic headers to verify routing:
@@ -114,7 +129,6 @@ Every chat completion response includes diagnostic headers to verify routing:
 | `X-Proxy-Primary-Provider` | Primary provider candidate (OpenAI endpoint) | `nvidia` |
 | `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint) | `qwen/qwen3.5-397b-a17b` |
 
-**[→ Full API Documentation](docs/API.md)**
 
 ## Configuration
 
@@ -177,7 +191,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 336 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution
+- **Test coverage:** 376 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support
 
 ## Testing
 

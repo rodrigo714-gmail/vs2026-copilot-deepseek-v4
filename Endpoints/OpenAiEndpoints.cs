@@ -251,7 +251,7 @@ internal static class OpenAiEndpoints
                 return;
             }
 
-            double streamCost = ModelPricing.CalculateCost(effectiveModel, provider.Name, 0, 0);
+            double streamCost = PricingCalculator.CalculateCost(effectiveModel, provider.Name, 0, 0);
             usageTracker.RecordRequest(provider.Name, 0, 0, 0, null, streamSw.ElapsedMilliseconds, streamCost);
             var rlHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var h in upstreamResp.Headers)
@@ -567,7 +567,7 @@ internal static class OpenAiEndpoints
         }
         catch { }
 
-        double cost = hasUsage ? ModelPricing.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        double cost = hasUsage ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
 
         usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
     }

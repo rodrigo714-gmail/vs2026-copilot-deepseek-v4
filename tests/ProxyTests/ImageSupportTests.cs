@@ -445,10 +445,10 @@ public class ImageSupportTests
     }
 
     [Fact]
-    public void ModelSelectionStore_Moonshot_KimiK25_HasVision()
+    public void ModelSelectionStore_Moonshot_KimiK26_HasVision()
     {
-        // kimi-k2.5 en moonshot.json tiene supports_vision: true
-        ModelSelectionEntry? entry = _store.FindModelSelectionEntry("kimi-k2.5", "moonshot");
+        // kimi-k2.6 en moonshot.json tiene supports_vision: true
+        ModelSelectionEntry? entry = _store.FindModelSelectionEntry("kimi-k2.6", "moonshot");
 
         Assert.NotNull(entry);
         Assert.True(entry.Value.Enabled);
@@ -515,7 +515,7 @@ public class ImageSupportTests
         // Testing conversion logic only — no provider HTTP calls.
         string[][] visionModelsAndRequests =
         [
-            ["kimi-k2.5", /*lang=json*/ """{"model":"kimi-k2.5","messages":[{"role":"user","content":[{"type":"text","text":"Describe"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]}],"stream":false}"""],
+            ["kimi-k2.6", /*lang=json*/ """{"model":"kimi-k2.6","messages":[{"role":"user","content":[{"type":"text","text":"Describe"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]}],"stream":false}"""],
             ["moonshot-v1-128k", /*lang=json*/ """{"model":"moonshot-v1-128k","messages":[{"role":"user","content":[{"type":"text","text":"Analyze"},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,BB=="}}]}],"stream":false}"""],
             ["models/gemini-2.5-flash", /*lang=json*/ """{"model":"models/gemini-2.5-flash","messages":[{"role":"user","content":[{"type":"text","text":"What"},{"type":"image_url","image_url":{"url":"data:image/png;base64,CC=="}}]}],"stream":false}"""],
         ];
@@ -549,7 +549,7 @@ public class ImageSupportTests
     {
         string[][] visionModelsAndRequests =
         [
-            ["kimi-k2.5", /*lang=json*/ """{"model":"kimi-k2.5","stream":false,"messages":[{"role":"user","content":"Desc","images":["data:image/png;base64,AA=="]}]}"""],
+            ["kimi-k2.6", /*lang=json*/ """{"model":"kimi-k2.6","stream":false,"messages":[{"role":"user","content":"Desc","images":["data:image/png;base64,AA=="]}]}"""],
             ["moonshot-v1-128k", /*lang=json*/ """{"model":"moonshot-v1-128k","stream":false,"messages":[{"role":"user","content":"Desc","images":["data:image/jpeg;base64,BB=="]}]}"""],
             ["models/gemini-2.5-flash", /*lang=json*/ """{"model":"models/gemini-2.5-flash","stream":false,"messages":[{"role":"user","content":"Desc","images":["data:image/png;base64,CC=="]}]}"""],
         ];
