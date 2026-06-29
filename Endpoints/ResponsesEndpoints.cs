@@ -1,7 +1,9 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 
 internal static class ResponsesEndpoints
 {
@@ -56,7 +58,7 @@ internal static class ResponsesEndpoints
 
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
                         HttpResponseMessage response = await candidateProvider.Client.SendAsync(
-                            new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = content },
+                            new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = content, Version = HttpVersion.Version11, VersionPolicy = HttpVersionPolicy.RequestVersionExact },
                             requestCt);
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
@@ -111,7 +113,9 @@ internal static class ResponsesEndpoints
             using StringContent reqContent = new(streamBody, Encoding.UTF8, "application/json");
             using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "/v1/chat/completions")
             {
-                Content = reqContent
+                Content = reqContent,
+                Version = HttpVersion.Version11,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
             upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
@@ -131,37 +135,62 @@ internal static class ResponsesEndpoints
         });
 
         // ── Additional Responses API endpoints ──────────────────────────
+        // NOTE: The following sub-endpoints are stubs: they satisfy the protocol
+        // contract so that Codex CLI doesn't error, but they do not persist or
+        // cancel any real server-side state. Returned data may be synthetic.
 
-        // GET /v1/responses/{response_id} — retrieve a stored response
+        /// <summary>
+        /// GET /v1/responses/{response_id} — retrieve a stored response.
+        /// STUB: always returns "status": "completed". No response persistence
+        /// is implemented; clients should not rely on this for recovery.
+        /// </summary>
         app.MapGet("/v1/responses/{responseId}", (string responseId) =>
-            Results.Json(new { id = responseId, @object = "response", status = "completed" }, JsonDefaults.SnakeCase));
+            Results.Json(new { id = responseId, @object = "response", status = "completed", warning = "stub" }, JsonDefaults.SnakeCase));
 
         // DELETE /v1/responses/{response_id} — delete a stored response
         app.MapDelete("/v1/responses/{responseId}", (string responseId) =>
             Results.Json(new { id = responseId, @object = "response.deleted", deleted = true }, JsonDefaults.SnakeCase));
 
-        // GET /v1/responses/{response_id}/input_items — list input items
+        /// <summary>
+        /// GET /v1/responses/{response_id}/input_items — list input items.
+        /// STUB: always returns an empty array. The proxy does not persist
+        /// conversation history between requests.
+        /// </summary>
         app.MapGet("/v1/responses/{responseId}/input_items", (string responseId) =>
-            Results.Json(new { data = Array.Empty<object>(), has_more = false, first_id = (string?)null, last_id = (string?)null }, JsonDefaults.SnakeCase));
+            Results.Json(new { data = Array.Empty<object>(), has_more = false, first_id = (string?)null, last_id = (string?)null, warning = "stub" }, JsonDefaults.SnakeCase));
 
-        // POST /v1/responses/{response_id}/input_tokens — count input tokens
-        app.MapPost("/v1/responses/{responseId}/input_tokens", async (HttpContext ctx) =>
+        /// <summary>
+        /// POST /v1/responses/{response_id}/input_tokens — count input tokens.
+        /// STUB: always returns zero. True token-counting requires a forward
+        /// to the upstream provider that is not yet implemented. The request
+        /// body and responseId are consumed but ignored.
+        /// </summary>
+        app.MapPost("/v1/responses/{responseId}/input_tokens", async (HttpContext ctx, ILoggerFactory loggerFactory) =>
         {
-            // Forward the token-counting request to the upstream provider so Codex
-            // gets accurate token usage for display.
+            ILogger logger = loggerFactory.CreateLogger("ResponsesEndpoints");
+            logger.LogWarning("POST /v1/responses/{ResponseId}/input_tokens called — returning stub zero count", ctx.Request.RouteValues["responseId"]);
+
             using StreamReader reader = new(ctx.Request.Body);
             string body = await reader.ReadToEndAsync();
             // Return a minimal response — Codex mainly needs this to not 404.
-            return Results.Json(new { input_tokens = 0, total_tokens = 0 }, JsonDefaults.SnakeCase);
+            return Results.Json(new { input_tokens = 0, total_tokens = 0, warning = "stub" }, JsonDefaults.SnakeCase);
         });
 
-        // POST /v1/responses/{response_id}/cancel — cancel an in-progress response
+        /// <summary>
+        /// POST /v1/responses/{response_id}/cancel — cancel an in-progress response.
+        /// STUB: always returns "status": "cancelled". No actual cancellation is
+        /// performed; the upstream request continues regardless.
+        /// </summary>
         app.MapPost("/v1/responses/{responseId}/cancel", (string responseId) =>
-            Results.Json(new { id = responseId, @object = "response", status = "cancelled" }, JsonDefaults.SnakeCase));
+            Results.Json(new { id = responseId, @object = "response", status = "cancelled", warning = "stub" }, JsonDefaults.SnakeCase));
 
-        // POST /v1/responses/{response_id}/compact — compact conversation history
+        /// <summary>
+        /// POST /v1/responses/{response_id}/compact — compact conversation history.
+        /// STUB: always returns "status": "completed". Context compaction is not
+        /// implemented.
+        /// </summary>
         app.MapPost("/v1/responses/{responseId}/compact", (string responseId) =>
-            Results.Json(new { id = responseId, @object = "response", status = "completed" }, JsonDefaults.SnakeCase));
+            Results.Json(new { id = responseId, @object = "response", status = "completed", warning = "stub" }, JsonDefaults.SnakeCase));
 
         return app;
     }
@@ -864,9 +893,7 @@ internal static class ResponsesEndpoints
             ["model"] = model,
             ["output"] = output,
             ["output_text"] = outputText,
-            ["temperature"] = 1,
-            ["top_p"] = 1,
-            ["parallel_tool_calls"] = true,
+            ["parallel_tool_calls"] = false,
             ["tools"] = new JsonArray(),
             ["tool_choice"] = "auto",
             ["truncation"] = "disabled",

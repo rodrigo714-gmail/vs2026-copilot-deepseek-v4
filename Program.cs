@@ -57,7 +57,7 @@ app.MapHealthEndpoints();
 Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
 Console.WriteLine($"║   DeepSeek / Multi-Provider Copilot Proxy (Ultra)               ║");
 Console.WriteLine($"╠══════════════════════════════════════════════════════════════════╣");
-Console.WriteLine($"║  Version: 2026.06.02                                             ║");
+Console.WriteLine($"║  Version: 2026.06.30                                             ║");
 Console.WriteLine($"║  Default: {providerRegistry.DefaultModel,-32}                                  ║");
 Console.WriteLine($"║  Providers: {string.Join(", ", providerRegistry.Providers.Select(pv => pv.Name)),-32}                          ║");
 Console.WriteLine($"║  Models:   {string.Join(", ", modelCatalog.AvailableModels),-32}                          ║");

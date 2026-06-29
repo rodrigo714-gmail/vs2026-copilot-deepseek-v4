@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -189,7 +190,7 @@ internal static class OpenAiEndpoints
 
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
                         HttpResponseMessage response = await candidateProvider.Client.SendAsync(
-                            new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
+                            new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content, Version = HttpVersion.Version11, VersionPolicy = HttpVersionPolicy.RequestVersionExact },
                             requestCt);
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
@@ -246,7 +247,9 @@ internal static class OpenAiEndpoints
             using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
             using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath)
             {
-                Content = reqContent
+                Content = reqContent,
+                Version = HttpVersion.Version11,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
             upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
@@ -309,7 +312,7 @@ internal static class OpenAiEndpoints
 
         using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content },
+            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content, Version = HttpVersion.Version11, VersionPolicy = HttpVersionPolicy.RequestVersionExact },
             requestCt);
 
         string respBody = await response.Content.ReadAsStringAsync(clientCt);
@@ -337,7 +340,7 @@ internal static class OpenAiEndpoints
 
         using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content },
+            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content, Version = HttpVersion.Version11, VersionPolicy = HttpVersionPolicy.RequestVersionExact },
             requestCt);
 
         string respBody = await response.Content.ReadAsStringAsync(clientCt);

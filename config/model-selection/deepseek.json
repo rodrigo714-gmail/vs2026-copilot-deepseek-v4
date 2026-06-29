@@ -30,7 +30,7 @@
         "temperature": 0.2,
         "max_tokens": 131072,
         "reasoning_effort": "medium",
-        "timeout_seconds": 90,
+        "timeout_seconds": 180,
         "top_p": 0.95
       }
     },
