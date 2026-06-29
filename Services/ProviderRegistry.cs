@@ -96,7 +96,28 @@ internal sealed class ProviderRegistry
         {
             string cleanModel = StripTagSuffix(requestedModel);
             // Handle VS 2026 Copilot display format from /api/tags: "PROVIDER - model_name:latest"
-            cleanModel = StripProviderDisplayPrefix(cleanModel);
+            string? displayProviderHint;
+            (cleanModel, displayProviderHint) = StripProviderDisplayPrefix(cleanModel);
+            // Strip @provider suffix (e.g. "qwen3.6-plus@zenmux" → "qwen3.6-plus")
+            string? atProviderHint = StripAtProviderSuffixGetProvider(cleanModel, out cleanModel);
+            // @provider suffix takes priority over display prefix hint
+            string? effectiveProviderHint = atProviderHint ?? displayProviderHint;
+
+            // If we have a provider hint (from @suffix or display prefix), check the
+            // qualified alias FIRST before falling back to the bare key (which may be
+            // mapped to a different provider with higher priority).
+            if (effectiveProviderHint is not null)
+            {
+                string qualifiedAlias = $"{cleanModel}@{effectiveProviderHint}";
+                if (_modelToProvider.ContainsKey(qualifiedAlias))
+                    return qualifiedAlias;
+
+                // Try rebuild with provider prefix (e.g. "kimi-k2.6" → "moonshotai/kimi-k2.6@zenmux")
+                string? rebuilt = RebuildQualifiedAlias(cleanModel, effectiveProviderHint);
+                if (rebuilt is not null)
+                    return rebuilt;
+            }
+
             if (_modelToProvider.ContainsKey(cleanModel))
                 return cleanModel;
 
@@ -143,29 +164,40 @@ internal sealed class ProviderRegistry
         if (string.IsNullOrWhiteSpace(model))
             return false;
         string clean = StripTagSuffix(model);
-        clean = StripProviderDisplayPrefix(clean);
+        (clean, _) = StripProviderDisplayPrefix(clean);
+        // Also strip @provider suffix (e.g. "qwen3.6-plus@zenmux" → "qwen3.6-plus")
+        StripAtProviderSuffixGetProvider(clean, out clean);
         if (_modelToProvider.ContainsKey(clean))
             return true;
         // Fallback: search by suffix (e.g. "gemini-2.5-pro" matches "models/gemini-2.5-pro")
-        return FindModelBySuffix(clean) is not null;
+        string? fallback = FindModelBySuffix(clean);
+        if (fallback is not null)
+            return true;
+        // Also try rebuilding qualified alias from @provider hint
+        string stripped = StripTagSuffix(StripProviderDisplayPrefix(model).CleanModel);
+        string? atHint = StripAtProviderSuffixGetProvider(stripped, out string bare);
+        if (atHint is not null && RebuildQualifiedAlias(bare, atHint) is not null)
+            return true;
+        return false;
     }
 
     /// <summary>
-    /// Removes the Copilot BYOM display prefix from a model name (e.g. "ZENMUX - claude-opus-4.8" → "claude-opus-4.8").
-    /// This is the format VS 2026 Copilot sends to /api/show from the /api/tags name field.
+    /// Removes the Copilot BYOM display prefix from a model name (e.g. "ZENMUX - claude-opus-4.8" → "claude-opus-4.8")
+    /// and returns the provider hint that was stripped.
     /// </summary>
-    private string StripProviderDisplayPrefix(string model)
+    private (string CleanModel, string? ProviderHint) StripProviderDisplayPrefix(string model)
     {
         int dashIdx = model.IndexOf(" - ");
         if (dashIdx > 0)
         {
             string maybeProvider = model[..dashIdx];
-            if (_providers.Any(p => string.Equals(p.Name, maybeProvider, StringComparison.OrdinalIgnoreCase)))
+            ProviderInfo? prov = _providers.FirstOrDefault(p => string.Equals(p.Name, maybeProvider, StringComparison.OrdinalIgnoreCase));
+            if (prov is { Name: var providerName })
             {
-                return model[(dashIdx + 3)..].Trim();
+                return (model[(dashIdx + 3)..].Trim(), providerName);
             }
         }
-        return model;
+        return (model, null);
     }
 
     /// <summary>
@@ -197,6 +229,48 @@ internal sealed class ProviderRegistry
     {
         int colonIdx = model.IndexOf(':');
         return colonIdx > 0 ? model[..colonIdx] : model;
+    }
+
+    /// <summary>
+    /// Strips the @provider suffix from a model name (e.g. "qwen3.6-plus@zenmux" → "qwen3.6-plus").
+    /// Returns the provider name if found, or null.
+    /// </summary>
+    private string? StripAtProviderSuffixGetProvider(string model, out string cleanModel)
+    {
+        int atIdx = model.IndexOf('@');
+        if (atIdx > 0 && atIdx < model.Length - 1)
+        {
+            cleanModel = model[..atIdx];
+            return model[(atIdx + 1)..];
+        }
+        cleanModel = model;
+        return null;
+    }
+
+    /// <summary>
+    /// Given a bare model name (e.g. "qwen3.6-plus") and a provider hint (e.g. "zenmux"),
+    /// rebuilds a qualified alias by searching for a key in _modelToProvider that belongs
+    /// to the specified provider and ends with the bare model name.
+    /// Example: "qwen3.6-plus" + "zenmux" → "qwen/qwen3.6-plus@zenmux"
+    /// </summary>
+    private string? RebuildQualifiedAlias(string bareModel, string providerHint)
+    {
+        foreach (KeyValuePair<string, ProviderInfo> kv in _modelToProvider)
+        {
+            if (!string.Equals(kv.Value.Name, providerHint, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Extract the suffix after the last /, and strip @provider if present
+            int lastSlash = kv.Key.LastIndexOf('/');
+            string suffix = lastSlash >= 0 ? kv.Key[(lastSlash + 1)..] : kv.Key;
+            int atIdx = suffix.IndexOf('@');
+            if (atIdx > 0)
+                suffix = suffix[..atIdx];
+
+            if (string.Equals(suffix, bareModel, StringComparison.OrdinalIgnoreCase))
+                return kv.Key;
+        }
+        return null;
     }
 
     internal string ResolveUpstreamModel(string? requestedModel)

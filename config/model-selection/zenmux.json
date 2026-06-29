@@ -2,190 +2,76 @@
   "provider": "zenmux",
   "models": [
     {
-      "match": "z-ai/glm-5.2",
-      "upstream": "z-ai/glm-5.2",
+      "match": "anthropic/claude-fable-5",
       "priority": 1,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
-        "supports_vision": false,
-        "family": "z-ai",
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "anthropic",
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 16384,
-        "timeout_seconds": 240
+        "timeout_seconds": 300
       }
     },
     {
-      "match": "glm-5.2-free",
-      "upstream": "z-ai/glm-5.2",
+      "match": "anthropic/claude-opus-4.8",
       "priority": 2,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
-        "supports_vision": false,
-        "family": "z-ai",
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "anthropic",
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 16384,
-        "timeout_seconds": 240
+        "timeout_seconds": 300
       }
     },
     {
-      "match": "glm-5.2",
-      "upstream": "z-ai/glm-5.2",
+      "match": "openai/gpt-5.5-pro",
       "priority": 3,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
-        "supports_vision": false,
-        "family": "z-ai",
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "openai",
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 16384,
-        "timeout_seconds": 240
+        "timeout_seconds": 300
       }
     },
     {
-      "match": "kimi-k2.7-code-free",
-      "upstream": "moonshotai/kimi-k2.7-code",
+      "match": "openai/gpt-5.5",
       "priority": 4,
       "enabled": true,
       "execution": {
-        "context_length": 262144,
-        "max_output_tokens": 262144,
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": true,
         "supports_reasoning": true,
-        "family": "moonshotai",
-        "temperature": 1.0,
-        "top_p": 0.95,
+        "family": "openai",
+        "temperature": 0.2,
+        "top_p": 0.9,
         "max_tokens": 16384,
-        "timeout_seconds": 180,
-        "override_client_params": true
+        "timeout_seconds": 300
       }
     },
     {
-      "match": "kimi-k2.7-code",
-      "upstream": "moonshotai/kimi-k2.7-code",
+      "match": "google/gemini-3.5-flash",
       "priority": 5,
-      "enabled": true,
-      "execution": {
-        "context_length": 262144,
-        "max_output_tokens": 262144,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "moonshotai",
-        "temperature": 1.0,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180,
-        "override_client_params": true
-      }
-    },
-    {
-      "match": "kimi-k2.6",
-      "upstream": "moonshotai/kimi-k2.6",
-      "priority": 6,
-      "enabled": true,
-      "execution": {
-        "context_length": 262144,
-        "max_output_tokens": 262144,
-        "supports_tools": true,
-        "supports_vision": false,
-        "supports_reasoning": false,
-        "family": "moonshotai",
-        "temperature": 1.0,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180,
-        "override_client_params": true
-      }
-    },
-    {
-      "match": "kimi-k2.7-code-highspeed",
-      "upstream": "moonshotai/kimi-k2.7-code-highspeed",
-      "priority": 7,
-      "enabled": true,
-      "execution": {
-        "context_length": 262144,
-        "max_output_tokens": 262144,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "moonshotai",
-        "temperature": 1.0,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180,
-        "override_client_params": true
-      }
-    },
-    {
-      "match": "qwen3.7-plus",
-      "upstream": "qwen/qwen3.7-plus",
-      "priority": 8,
-      "enabled": true,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "qwen3.7-max",
-      "upstream": "qwen/qwen3.7-max",
-      "priority": 9,
-      "enabled": true,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "qwen3.6-plus",
-      "upstream": "qwen/qwen3.6-plus",
-      "priority": 10,
-      "enabled": true,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "gemini-3.5-flash",
-      "upstream": "google/gemini-3.5-flash",
-      "priority": 11,
       "enabled": true,
       "execution": {
         "context_length": 1048576,
@@ -200,17 +86,15 @@
       }
     },
     {
-      "match": "gpt-5.5-pro",
-      "upstream": "openai/gpt-5.5-pro",
-      "priority": 12,
+      "match": "x-ai/grok-4.3",
+      "priority": 6,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "openai",
+        "family": "x-ai",
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 16384,
@@ -218,27 +102,25 @@
       }
     },
     {
-      "match": "gpt-5.5",
-      "upstream": "openai/gpt-5.5",
-      "priority": 13,
+      "match": "z-ai/glm-5.2",
+      "priority": 7,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "openai",
+        "supports_vision": false,
+        "family": "z-ai",
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 16384,
-        "timeout_seconds": 300
+        "timeout_seconds": 240
       }
     },
     {
-      "match": "deepseek-v4-pro",
-      "upstream": "deepseek/deepseek-v4-pro",
-      "priority": 14,
+      "match": "deepseek/deepseek-v4-pro",
+      "upstream": "deepseek-v4-pro",
+      "priority": 8,
       "enabled": true,
       "execution": {
         "context_length": 1048576,
@@ -253,9 +135,9 @@
       }
     },
     {
-      "match": "deepseek-v4-flash",
-      "upstream": "deepseek/deepseek-v4-flash",
-      "priority": 15,
+      "match": "deepseek/deepseek-v4-flash",
+      "upstream": "deepseek-v4-flash",
+      "priority": 9,
       "enabled": true,
       "execution": {
         "context_length": 1048576,
@@ -270,79 +152,74 @@
       }
     },
     {
-      "match": "grok-4.3",
-      "upstream": "x-ai/grok-4.3",
-      "priority": 16,
+      "match": "moonshotai/kimi-k2.7-code",
+      "priority": 10,
+      "enabled": true,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "moonshotai",
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "timeout_seconds": 180,
+        "override_client_params": true
+      }
+    },
+    {
+      "match": "moonshotai/kimi-k2.6",
+      "priority": 11,
+      "enabled": true,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "moonshotai",
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "timeout_seconds": 180,
+        "override_client_params": true
+      }
+    },
+    {
+      "match": "qwen/qwen3.7-plus",
+      "priority": 12,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": true,
-        "family": "x-ai",
+        "family": "qwen",
         "temperature": 0.2,
-        "top_p": 0.9,
+        "top_p": 0.95,
         "max_tokens": 16384,
-        "timeout_seconds": 300
+        "timeout_seconds": 180
       }
     },
     {
-      "match": "grok-build-0.1",
-      "upstream": "x-ai/grok-build-0.1",
-      "priority": 17,
+      "match": "qwen/qwen3-coder-plus",
+      "priority": 13,
       "enabled": true,
       "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
+        "context_length": 1048576,
+        "max_output_tokens": 262000,
         "supports_tools": true,
-        "supports_vision": true,
-        "family": "x-ai",
-        "temperature": 0.2,
-        "top_p": 0.9,
+        "supports_vision": false,
+        "family": "qwen",
+        "temperature": 0.15,
+        "top_p": 0.95,
         "max_tokens": 16384,
-        "timeout_seconds": 300
+        "timeout_seconds": 180
       }
     },
     {
-      "match": "claude-opus-4.8",
-      "upstream": "anthropic/claude-opus-4.8",
-      "priority": 18,
-      "enabled": true,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "anthropic",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 16384,
-        "timeout_seconds": 300
-      }
-    },
-    {
-      "match": "claude-fable-5",
-      "upstream": "anthropic/claude-fable-5",
-      "priority": 19,
-      "enabled": true,
-      "execution": {
-        "context_length": 1000000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "supports_reasoning": true,
-        "family": "anthropic",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 16384,
-        "timeout_seconds": 300
-      }
-    },
-    {
-      "match": "minimax-m3",
-      "upstream": "minimax/minimax-m3",
-      "priority": 20,
+      "match": "minimax/minimax-m3",
+      "priority": 14,
       "enabled": true,
       "execution": {
         "context_length": 1000000,

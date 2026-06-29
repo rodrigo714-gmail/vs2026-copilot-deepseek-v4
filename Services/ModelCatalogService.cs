@@ -128,16 +128,31 @@ internal sealed class ModelCatalogService
             foreach (var entry in entries)
             {
                 if (!entry.Enabled) continue;
-                if (string.IsNullOrWhiteSpace(entry.Upstream)) continue;
-                if (string.Equals(entry.Match, entry.Upstream, StringComparison.OrdinalIgnoreCase)) continue;
 
-                string up = entry.Upstream;
-                if (!newMap.ContainsKey(up))
+                // Upstream defaults to match when not specified
+                string up = string.IsNullOrWhiteSpace(entry.Upstream) ? entry.Match : entry.Upstream;
+
+                // Always register a qualified alias: match@provider
+                string qualified = $"{entry.Match}@{provider.Name}";
+                if (!newMap.ContainsKey(qualified))
                 {
-                    newMap[up] = provider;
-                    newUpstream[up] = up;
-                    if (!models.Contains(up)) models.Add(up);
+                    newMap[qualified] = provider;
+                    newUpstream[qualified] = up;
+                    if (!models.Contains(qualified)) models.Add(qualified);
                 }
+
+                // Register upstream if different from match
+                if (!string.Equals(entry.Match, up, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!newMap.ContainsKey(up))
+                    {
+                        newMap[up] = provider;
+                        newUpstream[up] = up;
+                        if (!models.Contains(up)) models.Add(up);
+                    }
+                }
+
+                // Register bare match
                 if (!newMap.ContainsKey(entry.Match))
                 {
                     newMap[entry.Match] = provider;
@@ -166,16 +181,31 @@ internal sealed class ModelCatalogService
             foreach (var entry in entries)
             {
                 if (!entry.Enabled) continue;
-                if (string.IsNullOrWhiteSpace(entry.Upstream)) continue;
-                if (string.Equals(entry.Match, entry.Upstream, StringComparison.OrdinalIgnoreCase)) continue;
 
-                string up = entry.Upstream;
-                if (!map.ContainsKey(up))
+                // Upstream defaults to match when not specified
+                string up = string.IsNullOrWhiteSpace(entry.Upstream) ? entry.Match : entry.Upstream;
+
+                // Always register a qualified alias: match@provider
+                string qualified = $"{entry.Match}@{provider.Name}";
+                if (!map.ContainsKey(qualified))
                 {
-                    map[up] = provider;
-                    upstream[up] = up;
-                    if (!models.Contains(up)) models.Add(up);
+                    map[qualified] = provider;
+                    upstream[qualified] = up;
+                    if (!models.Contains(qualified)) models.Add(qualified);
                 }
+
+                // Register upstream if different from match
+                if (!string.Equals(entry.Match, up, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!map.ContainsKey(up))
+                    {
+                        map[up] = provider;
+                        upstream[up] = up;
+                        if (!models.Contains(up)) models.Add(up);
+                    }
+                }
+
+                // Register bare match
                 if (!map.ContainsKey(entry.Match))
                 {
                     map[entry.Match] = provider;

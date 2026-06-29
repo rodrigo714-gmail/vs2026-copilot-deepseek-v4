@@ -2,8 +2,25 @@
   "provider": "google",
   "models": [
     {
-      "match": "models/gemini-2.5-pro",
+      "match": "models/gemini-3.5-flash",
       "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "google-gemini",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "reasoning_effort": "high",
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "match": "models/gemini-3.1-pro-preview",
+      "priority": 2,
       "enabled": true,
       "execution": {
         "context_length": 2097152,
@@ -16,33 +33,14 @@
         "max_tokens": 8192,
         "reasoning_effort": "high",
         "timeout_seconds": 180
-      },
-      "notes": "BEST FOR CODING. Modelo polivalente de vanguardia para programacion y razonamiento complejo. Free tier: input y output sin costo."
+      }
     },
     {
-      "match": "models/gemini-2.5-flash",
-      "priority": 2,
-      "enabled": true,
-      "execution": {
-        "context_length": 1048576,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "family": "google-gemini",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 8192,
-        "reasoning_effort": "medium",
-        "timeout_seconds": 120
-      },
-      "notes": "1M tokens de contexto + razonamiento hibrido. Free tier completo con Google Search grounding (500 RPD gratis)."
-    },
-    {
-      "match": "models/gemini-3.5-flash",
+      "match": "models/gemini-3-pro-preview",
       "priority": 3,
       "enabled": true,
       "execution": {
-        "context_length": 1048576,
+        "context_length": 2097152,
         "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": true,
@@ -51,9 +49,8 @@
         "top_p": 0.95,
         "max_tokens": 8192,
         "reasoning_effort": "high",
-        "timeout_seconds": 120
-      },
-      "notes": "Modelo mas inteligente para velocidad. CACHE DE CONTEXTO GRATUITO (unico). Generacion mas nueva."
+        "timeout_seconds": 180
+      }
     },
     {
       "match": "models/gemini-3-flash-preview",
@@ -70,8 +67,7 @@
         "max_tokens": 8192,
         "reasoning_effort": "medium",
         "timeout_seconds": 120
-      },
-      "notes": "Familia Gemini 3. Output barato en tier pago ($3/1M). Caching gratuito. Preview - puede cambiar."
+      }
     },
     {
       "match": "models/gemini-3.1-flash-lite",
@@ -88,13 +84,12 @@
         "max_tokens": 8192,
         "reasoning_effort": "low",
         "timeout_seconds": 90
-      },
-      "notes": "EL MAS BARATO. Optimizado para agentes de gran volumen. Lote: 50% descuento ($0.125 input / $0.75 output)."
+      }
     },
     {
-      "match": "models/gemini-3.1-pro-preview",
+      "match": "models/gemini-2.5-pro",
       "priority": 6,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 2097152,
         "max_output_tokens": 65536,
@@ -106,8 +101,41 @@
         "max_tokens": 8192,
         "reasoning_effort": "high",
         "timeout_seconds": 180
-      },
-      "notes": "MAXIMA CAPACIDAD pero SIN free tier. Vibe coding, capacidades de agente, comprension multimodal superior. Solo pago."
+      }
+    },
+    {
+      "match": "models/gemini-2.5-flash",
+      "priority": 7,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "google-gemini",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "reasoning_effort": "medium",
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "match": "models/gemini-2.5-flash-lite",
+      "priority": 8,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "google-gemini",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "reasoning_effort": "low",
+        "timeout_seconds": 90
+      }
     }
   ]
 }
