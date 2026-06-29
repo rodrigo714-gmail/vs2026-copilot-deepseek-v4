@@ -13,7 +13,7 @@
         "family": "openai",
         "temperature": 0.2,
         "max_tokens": 8192,
-        "reasoning_effort": "high",
+        "reasoning_effort": "medium",
         "timeout_seconds": 120
       }
     },

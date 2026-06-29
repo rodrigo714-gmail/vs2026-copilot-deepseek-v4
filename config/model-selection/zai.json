@@ -1,0 +1,79 @@
+{
+  "provider": "zai",
+  "models": [
+    {
+      "match": "glm-5.2",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 131072,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "reasoning_effort": "max",
+        "timeout_seconds": 240
+      },
+      "notes": "FLAGSHIP. 1M contexto real. #2 en WebDev Arena. Agentic coding model con reasoning_effort (max/high/medium/low/none). Precio: $1.40/$4.40 por M tokens."
+    },
+    {
+      "match": "glm-4.7-flash",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      },
+      "notes": "100% GRATIS. Modelo rapido para tareas simples y autocomplete. Sin costo de input ni output."
+    },
+    {
+      "match": "glm-4.7-flashx",
+      "priority": 3,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "reasoning_effort": "high",
+        "timeout_seconds": 180
+      },
+      "notes": "FlashX con reasoning. Barato: $0.07/$0.40 por M tokens. Buena relacion calidad/precio para tareas con razonamiento."
+    },
+    {
+      "match": "glm-4.7",
+      "priority": 4,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      },
+      "notes": "$0.60/$2.20 por M tokens. Modelo solido pre-GLM-5.2. Bueno para tareas que no requieren 1M contexto."
+    }
+  ]
+}

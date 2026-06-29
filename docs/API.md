@@ -368,3 +368,67 @@ Provider API keys are set via environment variables:
 | VS 2026 BYOM | `/api/*` | Ollama | ✅ Fully supported |
 | Native Ollama Client | `/api/*` | Ollama | ✅ Fully supported |
 | OpenAI SDK | `/v1/*` | OpenAI | ✅ Fully supported |
+## Usage Dashboard
+
+The proxy includes a real-time usage dashboard with cost tracking, latency metrics, and LLM Arena performance data.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/usage` | Full JSON report: cost, latency, tokens per model, Arena data |
+| GET | `/usage/summary` | Text summary for quick terminal view |
+| GET | `/usage/pricing` | Complete price catalog with Arena scores |
+| POST | `/usage/reset` | Reset all counters (admin) |
+
+### `/usage` Response Example
+
+```json
+{
+  "total_cost_usd": 0.1234,
+  "models": [
+    {
+      "provider": "zai",
+      "model": "glm-5.2",
+      "tier": "paid",
+      "requests": 47,
+      "success_rate_pct": 95.7,
+      "latency_avg_ms": 1840,
+      "tokens_in": 150588,
+      "tokens_out": 38164,
+      "cost_usd": 0.118,
+      "arena": { "elo": 1481, "webdev": 1593, "agent_win_rate_pct": 4.4 }
+    }
+  ]
+}
+```
+
+### `/usage/pricing`
+
+Returns the full pricing catalog with official provider costs, LLM Arena scores, and estimated tokens/second for each model.
+
+### Logging
+
+When `PROXY_LOG_LEVEL=info`, each request is logged with:
+
+```
+[HH:mm:ss] REQ  model -> provider (1/1 candidates)
+[HH:mm:ss] OK   provider/model 200 1840ms in:3204 out:812 $0.0078 [Arena:1481]
+[HH:mm:ss] FAIL provider/model 429 2103ms
+```
+
+### Economics
+
+The dashboard enables data-driven provider decisions:
+- **Real cost per model**: actual tokens used x official pricing
+- **Success rate**: which providers/models are reliable
+- **Latency**: avg/min/max per provider per model
+- **Arena comparison**: ELO, WebDev, Agent win rates for context
+- **Weekly/monthly projections**: extrapolate from actual usage
+
+### Configuration (.env)
+
+```
+PROXY_LOG_LEVEL=info          # info|debug|warn|error|none
+PROXY_LOG_FILE=               # path to log file (empty = console only)
+```

@@ -13,7 +13,7 @@
         "family": "deepseek",
         "temperature": 0.2,
         "max_tokens": 8192,
-        "reasoning_effort": "high",
+        "reasoning_effort": "medium",
         "timeout_seconds": 180
       }
     },
@@ -30,7 +30,7 @@
         "temperature": 0.2,
         "top_p": 0.95,
         "max_tokens": 4096,
-        "reasoning_effort": "low",
+        "reasoning_effort": "medium",
         "timeout_seconds": 60
       }
     },

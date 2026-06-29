@@ -93,7 +93,6 @@
         "family": "deepseek",
         "temperature": 0.2,
         "max_tokens": 8192,
-        "reasoning_effort": "high",
         "timeout_seconds": 180
       }
     },
