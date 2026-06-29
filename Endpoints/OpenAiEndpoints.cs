@@ -406,18 +406,31 @@ internal static class OpenAiEndpoints
                 using JsonDocument chunk = JsonDocument.Parse(line);
                 JsonElement root = chunk.RootElement;
 
-                // Extract content from Ollama message chunk
+                // Extract content from Ollama message chunk.
+                // Reasoning models (e.g. minimax-m3, kimi-k2.7-code) emit their thinking in
+                // "message.thinking" first while leaving "message.content" empty. Fall back to
+                // thinking when content is empty so VS 2026 BYOM sees a continuous stream.
                 string? deltaContent = null;
-                if (root.TryGetProperty("message", out JsonElement msg) &&
-                    msg.TryGetProperty("content", out JsonElement contentEl) &&
-                    contentEl.ValueKind == JsonValueKind.String)
+                if (root.TryGetProperty("message", out JsonElement msg))
                 {
-                    deltaContent = contentEl.GetString();
+                    bool hasContent = msg.TryGetProperty("content", out JsonElement contentEl) &&
+                                      contentEl.ValueKind == JsonValueKind.String &&
+                                      !string.IsNullOrWhiteSpace(contentEl.GetString());
+                    if (hasContent)
+                    {
+                        deltaContent = contentEl.GetString();
+                    }
+                    else if (msg.TryGetProperty("thinking", out JsonElement thinkingEl) &&
+                             thinkingEl.ValueKind == JsonValueKind.String)
+                    {
+                        deltaContent = thinkingEl.GetString();
+                    }
                 }
 
                 bool isDone = root.TryGetProperty("done", out JsonElement doneEl) && doneEl.GetBoolean();
 
-                if (deltaContent is not null)
+                // Skip chunks with empty/null content — VS 2026 BYOM doesn't handle them well
+                if (!string.IsNullOrWhiteSpace(deltaContent))
                 {
                     object sseChunk = new
                     {
@@ -430,7 +443,7 @@ internal static class OpenAiEndpoints
                             new
                             {
                                 index = 0,
-                                delta = new { content = deltaContent },
+                                delta = new { role = "assistant", content = deltaContent },
                                 finish_reason = (string?)null
                             }
                         }
