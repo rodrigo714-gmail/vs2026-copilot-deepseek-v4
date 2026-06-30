@@ -123,10 +123,11 @@ public class ParameterValidationTests
     // ─── OpenAI ──────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("gpt-5")]
-    [InlineData("gpt-5-mini")]
-    [InlineData("gpt-4.1")]
-    [InlineData("gpt-4o")]
+    [InlineData("gpt-5.5-pro")]
+    [InlineData("gpt-5.5")]
+    [InlineData("gpt-5.4")]
+    [InlineData("gpt-5.4-mini")]
+    [InlineData("o4-mini")]
     public void OpenAI_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -139,8 +140,9 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("gpt-5")]
-    [InlineData("gpt-5-mini")]
+    [InlineData("gpt-5.5-pro")]
+    [InlineData("gpt-5.5")]
+    [InlineData("o4-mini")]
     public void OpenAI_ReasoningCapableModels_ReasoningEffortInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -150,8 +152,8 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("gpt-4.1")]
-    [InlineData("gpt-4o")]
+    [InlineData("gpt-5.4")]
+    [InlineData("gpt-5.4-mini")]
     public void OpenAI_NonReasoningModels_NoReasoningEffort(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -161,8 +163,9 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("gpt-5")]
-    [InlineData("gpt-5-mini")]
+    [InlineData("gpt-5.5-pro")]
+    [InlineData("gpt-5.5")]
+    [InlineData("o4-mini")]
     public void OpenAI_ReasoningModels_NoTopPAlongReasoningEffort(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -179,10 +182,13 @@ public class ParameterValidationTests
     // ─── Groq ────────────────────────────────────────────────────────────
 
     [Theory]
+    [InlineData("qwen/qwen3.6-27b")]
+    [InlineData("openai/gpt-oss-120b")]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
     [InlineData("llama-3.3-70b-versatile")]
     [InlineData("qwen/qwen3-32b")]
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
-    [InlineData("openai/gpt-oss-120b")]
+    [InlineData("openai/gpt-oss-20b")]
+    [InlineData("groq/compound")]
     public void Groq_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -192,10 +198,13 @@ public class ParameterValidationTests
     }
 
     [Theory]
+    [InlineData("qwen/qwen3.6-27b")]
+    [InlineData("openai/gpt-oss-120b")]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
     [InlineData("llama-3.3-70b-versatile")]
     [InlineData("qwen/qwen3-32b")]
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
-    [InlineData("openai/gpt-oss-120b")]
+    [InlineData("openai/gpt-oss-20b")]
+    [InlineData("groq/compound")]
     public void Groq_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -308,7 +317,8 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("deepseek-v4-flash", "deepseek")]
-    [InlineData("gpt-5",             "openai")]
+    [InlineData("gpt-5.5-pro",       "openai")]
+    [InlineData("o4-mini",           "openai")]
     [InlineData("kimi-k2.7-code",    "moonshot")]
     [InlineData("kimi-k2.6",         "moonshot")]
     public void TopK_IsFiltered_ForNonSupportingProviders(string model, string provider)
@@ -341,7 +351,7 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("deepseek-v4-flash", "deepseek")]
-    [InlineData("gpt-5",             "openai")]
+    [InlineData("gpt-5.5-pro",       "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
     [InlineData("moonshot-v1-128k",  "moonshot")]
     public void ClientSupplied_MaxTokens_IsNotOverridden(string model, string provider)
@@ -357,7 +367,7 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
-    [InlineData("gpt-5",             "openai")]
+    [InlineData("gpt-5.5-pro",       "openai")]
     public void ClientSupplied_ReasoningEffort_IsNotOverridden(string model, string provider)
     {
         RequestTransformer sut = CreateTransformer();
@@ -407,10 +417,11 @@ public class ParameterValidationTests
     [InlineData("moonshotai/kimi-k2.6",          262_144, 262_144)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
     [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
-    [InlineData("gpt-5",      400_000, 128_000)]
-    [InlineData("gpt-5-mini", 400_000, 128_000)]
-    [InlineData("gpt-4.1",  1_048_576,  32_768)]
-    [InlineData("gpt-4o",     128_000,   8_192)]
+    [InlineData("gpt-5.5-pro",   400_000, 128_000)]
+    [InlineData("gpt-5.5",       400_000, 128_000)]
+    [InlineData("gpt-5.4",       400_000,  65_536)]
+    [InlineData("gpt-5.4-mini",  200_000,  32_768)]
+    [InlineData("o4-mini",       200_000, 100_000)]
     [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
     [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
     [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
@@ -422,7 +433,7 @@ public class ParameterValidationTests
     [InlineData("moonshot-v1-32k",            32_768,   8_192)]
     [InlineData("qwen/qwen3-coder",                  1_048_576, 262_000)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000,  16_384)]
-    [InlineData("nvidia/nemotron-3-ultra-550b-a55b", 1_000_000, 262_144)]
+    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", 131_072, 16_384)]
     [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
     [InlineData("zai-glm-4.7",  128_000, 32_768)]
     [InlineData("gpt-oss-120b", 131_072, 65_536)]
@@ -475,15 +486,18 @@ public class ParameterValidationTests
     [InlineData("nvidia/nemotron-3-super-120b-a12b", "nvidia")]
     [InlineData("openai/gpt-oss-120b",           "nvidia")]
     [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
-    [InlineData("gpt-5",        "openai")]
-    [InlineData("gpt-5-mini",   "openai")]
-    [InlineData("gpt-4.1",      "openai")]
-    [InlineData("gpt-4o",       "openai")]
-    [InlineData("gpt-oss-120b", "openai")]
-    [InlineData("llama-3.3-70b-versatile", "groq")]
-    [InlineData("qwen/qwen3-32b",           "groq")]
-    [InlineData("openai/gpt-oss-120b",      "groq")]
-    [InlineData("openai/gpt-oss-20b",       "groq")]
+    [InlineData("gpt-5.5-pro",   "openai")]
+    [InlineData("gpt-5.5",       "openai")]
+    [InlineData("gpt-5.4",       "openai")]
+    [InlineData("gpt-5.4-mini",  "openai")]
+    [InlineData("o4-mini",       "openai")]
+    [InlineData("qwen/qwen3.6-27b",              "groq")]
+    [InlineData("openai/gpt-oss-120b",           "groq")]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", "groq")]
+    [InlineData("llama-3.3-70b-versatile",        "groq")]
+    [InlineData("qwen/qwen3-32b",                "groq")]
+    [InlineData("openai/gpt-oss-20b",            "groq")]
+    [InlineData("groq/compound",                 "groq")]
     [InlineData("qwen/qwen3-coder", "openrouter")]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", "openrouter")]
     [InlineData("moonshotai/kimi-k2.6",  "openrouter")]
@@ -533,15 +547,15 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek", 2)]      // v4-pro + v4-flash (coder-6.7b disabled)
-    [InlineData("openai", 5)]        // gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b
-    [InlineData("nvidia", 5)]
-    [InlineData("groq", 5)]
-    [InlineData("openrouter", 7)]     // qwen3.7-plus, qwen3-coder, nemotron-super, nemotron-ultra, kimi-k2.7-code, deepseek-v4-pro, kimi-k2.6
+    [InlineData("openai", 5)]        // gpt-5.5-pro, gpt-5.5, gpt-5.4, gpt-5.4-mini, o4-mini
+    [InlineData("nvidia", 6)]
+    [InlineData("groq", 7)]
+    [InlineData("openrouter", 10)]
     [InlineData("moonshot", 6)]      // 6 enabled (kimi-k2.5 disabled)
     [InlineData("cerebras", 2)]
-    [InlineData("ollama", 9)]        // 8 ollamacloud + 1 ollama.json (mistral)
-    [InlineData("ollamacloud", 10)]  // 7 enabled + disabled
-    [InlineData("zenmux", 20)]     // All 20 entries enabled (multi-provider aggregator)
+    [InlineData("ollama", 15)]       // 5 ollama.json + 10 ollamacloud.json merged
+    [InlineData("ollamacloud", 10)]  // 10 enabled
+    [InlineData("zenmux", 14)]       // 14 enabled (multi-provider aggregator)
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {
         ModelSelectionStore store = new();

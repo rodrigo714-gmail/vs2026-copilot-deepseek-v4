@@ -492,7 +492,6 @@ internal static class ResponsesEndpoints
 
         var fullText = new StringBuilder();
         var reasoningText = new StringBuilder();
-        bool firstDelta = true;
         JsonObject? usageObj = null;
         string? finishReason = null;
 
@@ -604,7 +603,6 @@ internal static class ResponsesEndpoints
                                 ["delta"] = text
                             }, ct);
 
-                            firstDelta = false;
                         }
                     }
 
