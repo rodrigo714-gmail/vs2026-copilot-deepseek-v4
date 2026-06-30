@@ -104,7 +104,7 @@ Each provider exposes enabled models optimised for **GitHub Copilot inside Visua
 | **OpenRouter** | `qwen/qwen3.7-plus`, `qwen/qwen3-coder`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-3-ultra-550b-a55b`, `moonshotai/kimi-k2.7-code`, `deepseek/deepseek-v4-pro` | 6 enabled |
 | **Moonshot/Kimi** | `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`, `moonshot-v1-128k`, `moonshot-v1-auto` | 5 enabled; K2.x have `override_client_params=true` (forces `temperature=1.0`) |
 | **Cerebras** | `zai-glm-4.7`, `gpt-oss-120b` | 2 enabled |
-| **Ollama Cloud** | `kimi2.7-code`, `glm-5.2`, `minimax-m3`, `qwen3-coder:480b`, `qwen3-coder-next`, `devstral-2:123b`, `kimi-k2.6`, `deepseek-v4-pro`, `mistral-medium-3.5` | 9 enabled |
+| **Ollama Cloud** | `kimi2.7-code`, `glm-5.2`, `minimax-m3`, `qwen3-coder:480b`, `qwen3-coder-next`, `devstral-2:123b`, `kimi-k2.6`, `deepseek-v4-pro`, `glm-5.1`, `deepseek-v4-flash`, `nemotron-3-ultra` | 10 enabled |
 | **ZenMux** 🆕 | **`glm-5.2-free` (free 🆓)**, **`kimi-k2.7-code-free` (free, vision, reasoning 🆓)** | 2 enabled (free tier only) |
 
 ---
@@ -198,7 +198,7 @@ config/model-selection/
 ├── openrouter.json     # qwen3-coder, nemotron, kimi-k2.6, deepseek-v4-pro
 ├── moonshot.json       # kimi-k2.6, kimi-k2.5, moonshot-v1-*
 ├── cerebras.json       # zai-glm-4.7, gpt-oss-120b
-├── ollamacloud.json    # kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5
+├── ollamacloud.json    # kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, glm-5.1, deepseek-v4-flash, nemotron-3-ultra
 └── zenmux.json         # glm-5.2-free 🆓, kimi-k2.7-code-free 🆓 (free tier only)
 ```
 

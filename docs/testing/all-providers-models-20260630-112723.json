@@ -1,0 +1,767 @@
+﻿{
+    "generated_at":  "2026-06-30T11:27:23.8488672-03:00",
+    "summary":  {
+                    "total":  84,
+                    "passed":  41,
+                    "failed":  41,
+                    "skipped":  0
+                },
+    "results":  [
+                    {
+                        "provider":  "deepseek",
+                        "model":  "deepseek-v4-pro",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1691,
+                        "sample":  "We are asked: \"Reply exactly: OK\". The instruction is to reply exactly",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "deepseek",
+                        "model":  "deepseek-v4-flash",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1120,
+                        "sample":  "We are asked: \"Reply exactly: OK\". So the instruction is to reply",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "gpt-5.5-pro",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "gpt-5.5",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "gpt-5.4",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "gpt-5.4-pro",
+                        "status":  "fail",
+                        "http_status":  "http_404",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "gpt-5.4-mini",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "o4-pro",
+                        "status":  "fail",
+                        "http_status":  "http_404",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openai",
+                        "model":  "o4-mini",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-3.5-flash",
+                        "status":  "empty",
+                        "http_status":  "",
+                        "latency_ms":  1802,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-3.1-pro-preview",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "[{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-"
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-3-pro-preview",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "[{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-"
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-3-flash-preview",
+                        "status":  "empty",
+                        "http_status":  "",
+                        "latency_ms":  13219,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-3.1-flash-lite",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  529,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-2.5-pro",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "[{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-"
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-2.5-flash",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "[{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-"
+                    },
+                    {
+                        "provider":  "google",
+                        "model":  "models/gemini-2.5-flash-lite",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "[{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-"
+                    },
+                    {
+                        "provider":  "zai",
+                        "model":  "glm-5.2",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "{\"error\":{\"code\":\"1113\",\"message\":\"Insufficient balance or no resource package. Please recharge.\"}}"
+                    },
+                    {
+                        "provider":  "zai",
+                        "model":  "glm-5.1",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "{\"error\":{\"code\":\"1113\",\"message\":\"Insufficient balance or no resource package. Please recharge.\"}}"
+                    },
+                    {
+                        "provider":  "zai",
+                        "model":  "glm-4.7-flashx",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "{\"error\":{\"code\":\"1113\",\"message\":\"Insufficient balance or no resource package. Please recharge.\"}}"
+                    },
+                    {
+                        "provider":  "zai",
+                        "model":  "glm-4.7-flash",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  46585,
+                        "sample":  "1.  **Analyze the Request:** The user wants me to reply with",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zai",
+                        "model":  "glm-4.7",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "{\"error\":{\"code\":\"1113\",\"message\":\"Insufficient balance or no resource package. Please recharge.\"}}"
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "moonshotai/kimi-k2.6",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  2641,
+                        "sample":  " OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "nvidia/nemotron-3-super-120b-a12b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  602,
+                        "sample":  "User says: \"Reply exactly: OK\". So we must output exactly \"OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "openai/gpt-oss-120b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  13695,
+                        "sample":  "The user says: \"Reply exactly: OK\". So we must",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "qwen/qwen3.5-397b-a17b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  26664,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  512,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "meta/llama-3.3-70b-instruct",
+                        "status":  "fail",
+                        "http_status":  "http_",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "Se excedió el tiempo de espera de la operación"
+                    },
+                    {
+                        "provider":  "nvidia",
+                        "model":  "deepseek-ai/deepseek-r1",
+                        "status":  "fail",
+                        "http_status":  "http_404",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "anthropic/claude-sonnet-4.6",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  3172,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "openai/gpt-5.4",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  893,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "google/gemini-3.5-flash",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1948,
+                        "sample":  "**Exploring New Connections**\n\nI\u0027m currently delving into novel relationships wi",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "deepseek/deepseek-v4-pro",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  3602,
+                        "sample":  "We are asked: \"Reply exactly: OK\". So the response should be exactly",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "qwen/qwen3.7-plus",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  3735,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "qwen/qwen3-coder",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  937,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "moonshotai/kimi-k2.7-code",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1234,
+                        "sample":  " The user wants me to reply exactly with \"OK\". I should output just that",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "x-ai/grok-4.3",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  2278,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "moonshotai/kimi-k2.6",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  2512,
+                        "sample":  "The user wants me to reply exactly with \"OK\". No other text, no",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "openrouter",
+                        "model":  "nvidia/nemotron-3-super-120b-a12b",
+                        "status":  "fail",
+                        "http_status":  "http_422",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  "{\"error\":{\"message\":\"Provider returned error\",\"code\":422,\"metadata\":{\"raw\":\"{\\\"detail\\\":\\\"Error while parsing extra body parameters: [{\u0027type\u0027: \u0027extra_forbidden\u0027, \u0027loc\u0027: (\u0027seed\u0027,), \u0027msg\u0027: \u0027Extra inputs"
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "qwen/qwen3.6-27b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  340,
+                        "sample":  "\n\u003cthink\u003e\nHere\u0027s a thinking process:\n\n1.  **Analyze User Input:**",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "openai/gpt-oss-120b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  365,
+                        "sample":  "The user says: \"Reply exactly: OK\". So we must",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "meta-llama/llama-4-scout-17b-16e-instruct",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1072,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "llama-3.3-70b-versatile",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  333,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "qwen/qwen3-32b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  288,
+                        "sample":  "\u003cthink\u003e\nOkay, the user wants me to reply exactly with \"OK\". Let",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "openai/gpt-oss-20b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  392,
+                        "sample":  "The user says: \"Reply exactly: OK\". So we must",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "groq",
+                        "model":  "groq/compound",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  4358,
+                        "sample":  "**Reasoning and Explanation**\n\nThe original request was to âReply exactly: OK.",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "qwen3-coder:480b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1768,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "qwen3-coder-next",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  2148,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "mistral",
+                        "status":  "fail",
+                        "http_status":  "http_404",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "devstral-2:123b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  893,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "kimi-k2.6",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1333,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "deepseek-v4-pro",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1178,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "glm-5.2",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  11896,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "deepseek-v4-pro",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1178,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "kimi-k2.7-code",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1353,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "kimi-k2.6",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1959,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "glm-5.1",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1860,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "minimax-m3",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1251,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "qwen3-coder:480b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  1565,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "deepseek-v4-flash",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  927,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "nemotron-3-ultra",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  41171,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "ollamacloud",
+                        "model":  "qwen3-coder-next",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  970,
+                        "sample":  "OK",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "moonshot",
+                        "model":  "kimi-k2.7-code",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "moonshot",
+                        "model":  "kimi-k2.7-code-highspeed",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "moonshot",
+                        "model":  "kimi-k2.6",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "moonshot",
+                        "model":  "moonshot-v1-128k",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "moonshot",
+                        "model":  "moonshot-v1-auto",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "moonshot",
+                        "model":  "moonshot-v1-32k",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "cerebras",
+                        "model":  "zai-glm-4.7",
+                        "status":  "fail",
+                        "http_status":  "http_429",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "cerebras",
+                        "model":  "gpt-oss-120b",
+                        "status":  "ok",
+                        "http_status":  "",
+                        "latency_ms":  449,
+                        "sample":  "The user says: \"Reply exactly: OK\". So they want",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "anthropic/claude-fable-5",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "anthropic/claude-opus-4.8",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "openai/gpt-5.5-pro",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "openai/gpt-5.5",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "google/gemini-3.5-flash",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "x-ai/grok-4.3",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "z-ai/glm-5.2",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "deepseek/deepseek-v4-pro",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "deepseek/deepseek-v4-flash",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "moonshotai/kimi-k2.7-code",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "moonshotai/kimi-k2.6",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "qwen/qwen3.7-plus",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "qwen/qwen3-coder-plus",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    },
+                    {
+                        "provider":  "zenmux",
+                        "model":  "minimax/minimax-m3",
+                        "status":  "fail",
+                        "http_status":  "http_402",
+                        "latency_ms":  0,
+                        "sample":  "",
+                        "error":  ""
+                    }
+                ]
+}

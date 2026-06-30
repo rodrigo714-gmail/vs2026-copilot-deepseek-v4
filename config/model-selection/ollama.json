@@ -34,22 +34,6 @@
       }
     },
     {
-      "match": "mistral",
-      "priority": 3,
-      "enabled": true,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "mistral",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
       "match": "devstral-2:123b",
       "priority": 4,
       "enabled": true,

@@ -49,22 +49,6 @@
       }
     },
     {
-      "match": "gpt-5.4-pro",
-      "priority": 4,
-      "enabled": true,
-      "execution": {
-        "context_length": 400000,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": true,
-        "family": "openai",
-        "temperature": 0.2,
-        "max_tokens": 8192,
-        "reasoning_effort": "medium",
-        "timeout_seconds": 120
-      }
-    },
-    {
       "match": "gpt-5.4-mini",
       "priority": 5,
       "enabled": true,
@@ -77,22 +61,6 @@
         "temperature": 0.2,
         "max_tokens": 8192,
         "timeout_seconds": 60
-      }
-    },
-    {
-      "match": "o4-pro",
-      "priority": 6,
-      "enabled": true,
-      "execution": {
-        "context_length": 200000,
-        "max_output_tokens": 100000,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "openai",
-        "temperature": 1.0,
-        "max_tokens": 32768,
-        "reasoning_effort": "high",
-        "timeout_seconds": 180
       }
     },
     {

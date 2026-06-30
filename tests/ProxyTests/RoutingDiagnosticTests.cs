@@ -222,21 +222,21 @@ public class RoutingDiagnosticTests : IDisposable
     }
 
     /// <summary>
-    /// mistral-medium-3.5 solo está en ollamacloud.json. Debe enrutar a ollama.
+    /// nemotron-3-ultra solo está en ollamacloud.json. Debe enrutar a ollama.
     /// </summary>
     [Fact]
-    public async Task MistralMedium35_OnlyInOllamaCloud_RoutesToOllama()
+    public async Task Nemotron3Ultra_OnlyInOllamaCloud_RoutesToOllama()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(new Dictionary<string, string[]>
             {
                 ["deepseek"] = ["deepseek-v4-pro"],
-                ["ollama"] = ["mistral-medium-3.5"],
+                ["ollama"] = ["nemotron-3-ultra"],
             });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        ProviderInfo provider = registry.ResolveProvider("mistral-medium-3.5");
+        ProviderInfo provider = registry.ResolveProvider("nemotron-3-ultra");
         Assert.Equal("ollama", provider.Name);
     }
 

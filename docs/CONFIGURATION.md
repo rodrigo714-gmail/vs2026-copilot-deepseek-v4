@@ -235,7 +235,7 @@ Enabled models by provider:
 | OpenRouter | 7 | qwen3.7-plus (1M), qwen3-coder (1M), nemotron-3-super (1M), nemotron-3-ultra (1M), kimi-k2.7-code (262K), deepseek-v4-pro (1M) |
 | Moonshot/Kimi | 6 | kimi-k2.7-code (262K), kimi-k2.6 (262K), kimi-k2.5 (262K), moonshot-v1-128k (131K), moonshot-v1-auto (131K), moonshot-v1-32k (32K) |
 | Cerebras | 2 | zai-glm-4.7 (128K), gpt-oss-120b (131K) |
-| Ollama Cloud | 10 | kimi2.7-code (262K), glm-5.2 (1M), minimax-m3 (1M), qwen3-coder:480b (1M), qwen3-coder-next (1M), devstral-2:123b (128K), kimi-k2.6 (262K), deepseek-v4-pro (1M), mistral-medium-3.5 (128K) |
+| Ollama Cloud | 10 | kimi2.7-code (262K), glm-5.2 (1M), minimax-m3 (1M), qwen3-coder:480b (1M), qwen3-coder-next (1M), devstral-2:123b (128K), kimi-k2.6 (262K), deepseek-v4-pro (1M), glm-5.1 (128K), deepseek-v4-flash (128K), nemotron-3-ultra (128K) |
 | ZenMux | 2 (free) | **glm-5.2-free 🆓** (1M), **kimi-k2.7-code-free 🆓** (262K, vision, reasoning) |
 
 ---
