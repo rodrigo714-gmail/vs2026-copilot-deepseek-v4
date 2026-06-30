@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "vs2026-copilot-deepseek-v4": {
+    "ai-proxy-hub": {
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",

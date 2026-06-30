@@ -1,0 +1,93 @@
+{
+  "provider": "zai",
+  "models": [
+    {
+      "match": "glm-5.2",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 131072,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "reasoning_effort": "max",
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "glm-5.1",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "reasoning_effort": "high",
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "glm-4.7-flashx",
+      "priority": 3,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "reasoning_effort": "high",
+        "timeout_seconds": 180
+      }
+    },
+    {
+      "match": "glm-4.7-flash",
+      "priority": 4,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "match": "glm-4.7",
+      "priority": 5,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      }
+    }
+  ]
+}

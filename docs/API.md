@@ -1,14 +1,16 @@
 # Multi-Provider AI Proxy - API Reference
 
-Complete API documentation for the C# multi-provider proxy supporting DeepSeek, OpenAI, NVIDIA NIM, OpenRouter, Groq, Moonshot/Kimi, Cerebras, and Ollama Cloud.
+Complete API documentation for the C# multi-provider proxy supporting DeepSeek, OpenAI, NVIDIA NIM, OpenRouter, Groq, Moonshot/Kimi, Cerebras, Ollama Cloud, and ZenMux.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Dual API Support](#dual-api-support)
 - [Health & Diagnostics](#health--diagnostics)
+- [Diagnostic Response Headers](#diagnostic-response-headers)
 - [OpenAI-Compatible Endpoints](#openai-compatible-endpoints)
 - [Ollama-Compatible Endpoints](#ollama-compatible-endpoints)
+- [Image Support](#image-support)
 - [Request/Response Examples](#requestresponse-examples)
 - [Error Handling](#error-handling)
 - [Model Resolution](#model-resolution)
@@ -23,7 +25,7 @@ The proxy provides two API interfaces:
 1. **OpenAI-compatible** (`/v1/*`) — for GitHub Copilot, Cursor, Continue.dev, OpenAI SDKs
 2. **Ollama-compatible** (`/api/*`) — for Visual Studio BYOM, native Ollama clients
 
-Both interfaces route requests to the configured backend provider (DeepSeek, OpenAI, NVIDIA, OpenRouter, Groq, Moonshot/Kimi, Cerebras, Ollama Cloud) based on the requested model name.
+Both interfaces route requests to the configured backend provider (DeepSeek, OpenAI, NVIDIA, OpenRouter, Groq, Moonshot/Kimi, Cerebras, Ollama Cloud, ZenMux) based on the requested model name.
 
 ### Base URL
 
@@ -58,26 +60,43 @@ curl http://localhost:11434/health
     "openrouter",
     "ollama",
     "moonshot",
-    "cerebras"
+    "cerebras",
+    "zenmux"
   ],
   "availableModels": [
     "deepseek-v4-pro",
-    "deepseek-v4-flash",
     "gpt-5",
-    "kimi-k2.7-code",
-    "kimi-k2.6",
-    "zai-glm-4.7",
-    "qwen3-coder:480b",
-    "... (~40 models, 5 enabled per provider, 1-2 for DeepSeek/Cerebras/Ollama)"
+    "kimi2.7-code",
+    "glm-5.2",
+    "z-ai/glm-5.2-free",
+    "... (~60 models total)"
   ],
   "defaultModel": "deepseek-v4-pro"
 }
 ```
 
-> Providers that have no `PROVIDER_*_API_KEY` env var set are silently skipped — only the providers you configured are listed.
+> Providers without env vars are silently skipped — only configured providers are listed.
 
 **Status Codes:**
 - `200 OK` — Proxy is healthy and at least one provider is configured
+
+---
+
+## Diagnostic Response Headers
+
+Both `/v1/chat/completions` and `/api/chat` endpoints include diagnostic response headers to help verify routing:
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-Proxy-Requested-Model` | The model name as sent by the client | `deepseek-v4-pro:latest` |
+| `X-Proxy-Resolved-Model` | The resolved internal model id after alias resolution | `deepseek-v4-pro` |
+| `X-Proxy-Upstream-Model` | The model id that was sent to the upstream API | `deepseek-v4-pro` |
+| `X-Proxy-Provider` | The provider that handled the request | `deepseek`, `zenmux`, `ollama` |
+| `X-Proxy-Candidate-Count` | Number of failover candidates (OpenAI endpoint only) | `1`, `3` |
+| `X-Proxy-Primary-Provider` | Primary candidate provider (OpenAI endpoint only) | `nvidia` |
+| `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint only) | `qwen/qwen3.5-397b-a17b` |
+
+> Use these headers to verify that the expected provider is being selected. If the provider is unexpected, the model name may need a qualified alias (e.g. `model@provider:latest`).
 
 ---
 
@@ -85,7 +104,7 @@ curl http://localhost:11434/health
 
 ### GET /v1/models
 
-List available models in OpenAI format. **Only returns routable ids** — either bare upstream ids (lowest-priority claimant wins) or fully-qualified `upstream@provider` aliases. Raw `provider/model` strings are intentionally **not** listed because the proxy's routing layer cannot accept them on POST requests.
+List available models in OpenAI format. **Only returns routable ids** — either bare upstream ids (lowest-priority claimant wins) or fully-qualified `upstream@provider` aliases.
 
 **Request:**
 ```bash
@@ -104,38 +123,19 @@ curl http://localhost:11434/v1/models
       "owned_by": "deepseek"
     },
     {
-      "id": "kimi-k2.7-code",
+      "id": "z-ai/glm-5.2-free",
       "object": "model",
       "created": 1700000000,
-      "owned_by": "moonshot"
+      "owned_by": "zenmux"
     },
-    {
-      "id": "kimi-k2.6",
-      "object": "model",
-      "created": 1700000000,
-      "owned_by": "moonshot"
-    },
-    "... (5 enabled per provider, ~40 total)"
+    "... (~60 total)"
   ]
 }
 ```
 
-**Notes:**
-- A bare `id` (e.g. `kimi-k2.6`) means the lowest-priority claimant provider wins. If multiple providers offer the same upstream id (e.g. NVIDIA and Groq both expose `openai/gpt-oss-120b`), NVIDIA wins by discovery order (`deepseek, openai, nvidia, openrouter, groq, ollama, moonshot, cerebras`).
-- A qualified `id` like `kimi-k2.6@moonshot` forces routing to that specific provider with no failover. Use this when you need to pin the upstream.
-- Use `POST /v1/chat/completions` with the chosen id verbatim — the proxy resolves both forms.
-
----
-
 ### POST /v1/chat/completions
 
 Chat completion endpoint compatible with OpenAI API.
-
-**Request Headers:**
-```
-Content-Type: application/json
-Authorization: Bearer {optional-api-key}  (typically not needed for proxy)
-```
 
 **Request Body:**
 ```json
@@ -150,8 +150,7 @@ Authorization: Bearer {optional-api-key}  (typically not needed for proxy)
   "stream": false,
   "temperature": 0.7,
   "max_tokens": 2000,
-  "top_p": 0.9,
-  "reasoning_effort": "medium"
+  "top_p": 0.9
 }
 ```
 
@@ -159,87 +158,39 @@ Authorization: Bearer {optional-api-key}  (typically not needed for proxy)
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | Model ID (e.g., `deepseek-v4-pro`, `gpt-5`, `kimi-k2.7-code`) |
+| `model` | string | Yes | Model ID (e.g., `deepseek-v4-pro`, `glm-5.2-free`, `kimi-k2.7-code-free`) |
 | `messages` | array | Yes | Message history with `role` (user/assistant/system) and `content` |
+| `messages[].content` | string/array | Yes | Plain text **or** multi-part array with `type: "text"` and `type: "image_url"` for vision models |
 | `stream` | boolean | No | Enable streaming mode (default: `false`) |
-| `temperature` | float | No | Sampling temperature (0.0–2.0, default: 0.7) |
-| `top_p` | float | No | Nucleus sampling (0.0–1.0, default: 0.9) |
-| `max_tokens` | integer | No | Max output tokens (default: model-specific) |
-| `reasoning_effort` | string | No | DeepSeek/OpenAI reasoning level: "low", "medium", "high", "default" |
+| `temperature` | float | No | Sampling temperature (0.0–2.0) |
+| `top_p` | float | No | Nucleus sampling (0.0–1.0) |
+| `max_tokens` | integer | No | Max output tokens |
+| `reasoning_effort` | string | No | DeepSeek/OpenAI reasoning level: "low", "medium", "high" |
 
-**Response (Non-streaming):**
+**Multi-part content with images (for vision models):**
 ```json
 {
-  "id": "chatcmpl-8ABC123",
-  "object": "chat.completion",
-  "created": 1700000000,
-  "model": "deepseek-v4-pro",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "Quantum computing leverages quantum bits (qubits)..."
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 42,
-    "completion_tokens": 156,
-    "total_tokens": 198
-  }
+  "role": "user",
+  "content": [
+    {"type": "text", "text": "What's in this image?"},
+    {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBOR..."}}
+  ]
 }
 ```
 
-**Response (Streaming - SSE):**
-```
-data: {"choices":[{"delta":{"content":"Quantum"},"finish_reason":null}]}
-data: {"choices":[{"delta":{"content":" computing"},"finish_reason":null}]}
-...
-data: [DONE]
-```
+> For Ollama-format providers, the proxy automatically converts multi-part content to the `images` array format.
 
-**Status Codes:**
-- `200 OK` — Successful response
-- `400 Bad Request` — Invalid request format or unsupported parameter combination
-- `401 Unauthorized` — Authentication failed with upstream provider
-- `502 Bad Gateway` — All provider candidates failed or downstream error
-- `503 Service Unavailable` — No providers configured
+**Supported providers:** DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux. The proxy automatically filters unsupported parameters per provider.
 
-**Notes:**
-- `reasoning_effort` is only supported by DeepSeek and OpenAI (o-series) models. The proxy automatically filters this parameter for unsupported providers.
-- When `reasoning_effort` is set, `top_p` is omitted per DeepSeek/OpenAI documentation to avoid undefined behavior.
-- `top_k` is automatically filtered for providers that do not support it: DeepSeek, OpenAI, and Moonshot/Kimi. It is preserved for NVIDIA, Groq, and OpenRouter.
-- The proxy caches `reasoning_content` from DeepSeek responses and reinjects it on subsequent assistant messages.
-- **Moonshot Kimi K2.x force-mode:** the proxy always sets `temperature=1.0` for `kimi-k2.7-code`, `kimi-k2.6`, and `kimi-k2.5` regardless of what the client sends. These models reject any request where `temperature ≠ 1.0`. See [Force-Mode Parameter Override](#force-mode-parameter-override).
-- Supported providers: DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras.
+**Diagnostic headers:** Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Provider`, `X-Proxy-Candidate-Count`, `X-Proxy-Primary-Provider`, `X-Proxy-Primary-Upstream`.
 
 ---
 
 ## Ollama-Compatible Endpoints
 
-### GET /api/version
-
-Get proxy version (Ollama-compatible).
-
-**Request:**
-```bash
-curl http://localhost:11434/api/version
-```
-
-**Response:**
-```json
-{
-  "version": "0.5.7"
-}
-```
-
----
-
 ### GET /api/tags
 
-List available models in Ollama format.
+List available models in Ollama format. The `model` field uses **qualified aliases** (`model@provider:latest`) to ensure requests route to the correct provider.
 
 **Request:**
 ```bash
@@ -251,103 +202,44 @@ curl http://localhost:11434/api/tags
 {
   "models": [
     {
-      "name": "deepseek-v4-pro:latest",
-      "model": "deepseek-v4-pro",
+      "name": "OLLAMA - deepseek-v4-pro:latest",
+      "model": "deepseek-v4-pro@ollama:latest",
       "modified_at": "2026-06-04T10:30:00Z",
-      "size": 10737418240,
-      "digest": "abc123def456"
-    },
-    "...other models..."
+      "size": 3826793677,
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "parent_model": "",
+        "format": "api",
+        "family": "deepseek",
+        "families": ["deepseek"],
+        "parameter_size": "api",
+        "quantization_level": "none"
+      },
+      "capabilities": ["completion", "tools"],
+      "context_length": 1048576,
+      "max_output_tokens": 384000,
+      "supports_tools": true,
+      "supports_vision": false,
+      "supports_images": false
+    }
   ]
 }
 ```
 
----
-
-### GET /api/show
-
-Get model details (GET variant).
-
-**Request:**
-```bash
-curl "http://localhost:11434/api/show?model=deepseek-v4-pro"
-```
-
-**Query Parameters:**
-- `model` (string, required) — Model ID to retrieve details for
-
-**Response:**
-```json
-{
-  "name": "deepseek-v4-pro",
-  "model": "deepseek-v4-pro",
-  "details": {
-    "parameter_size": "680B",
-    "quantization_level": "native",
-    "family": "deepseek",
-    "families": ["deepseek"],
-    "ParameterSize": "680B",
-    "Quantization": "native"
-  },
-  "modelfile": "FROM deepseek-v4-pro\nSET temperature 0.7\nSET top_p 0.9",
-  "template": "{{ .Prompt }}",
-  "parameters": "temperature 0.7 top_p 0.9"
-}
-```
-
----
-
-### POST /api/show
-
-Get model details (POST variant).
-
-**Request:**
-```bash
-curl -X POST http://localhost:11434/api/show \
-  -H "Content-Type: application/json" \
-  -d '{"model": "deepseek-v4-pro"}'
-```
-
-**Request Body:**
-```json
-{
-  "model": "deepseek-v4-pro"
-}
-```
-
-**Response:** Same as GET /api/show
-
----
+**Important:** The `model` field uses `model@provider:latest` format. When sending this model back via POST, the provider-qualified form ensures correct routing to the specific provider instead of falling back to the default provider.
 
 ### POST /api/chat
 
 Chat completion endpoint (Ollama-compatible).
 
-**Request:**
-```bash
-curl -X POST http://localhost:11434/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-v4-pro",
-    "messages": [
-      {"role": "user", "content": "What is Rust?"}
-    ],
-    "stream": false
-  }'
-```
-
 **Request Body:**
 ```json
 {
-  "model": "deepseek-v4-pro",
+  "model": "glm-5.2-free",
   "messages": [
-    {
-      "role": "user",
-      "content": "What is Rust?"
-    }
+    {"role": "user", "content": "What is Rust?"}
   ],
   "stream": false,
-  "keep_alive": "5m",
   "options": {
     "temperature": 0.7,
     "top_p": 0.9
@@ -355,116 +247,46 @@ curl -X POST http://localhost:11434/api/chat \
 }
 ```
 
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | Model ID (required) |
-| `messages` | array | Message history (required) |
-| `stream` | boolean | Streaming mode (default: false) |
-| `keep_alive` | string | Session duration (default: "5m") |
-| `options` | object | Sampling options (temperature, top_p, etc.) |
-
-**Response (Non-streaming):**
+**Ollama images format (for vision models):**
 ```json
 {
-  "model": "deepseek-v4-pro",
-  "created_at": "2026-06-04T10:30:00Z",
-  "message": {
-    "role": "assistant",
-    "content": "Rust is a systems programming language..."
-  },
-  "done": true,
-  "total_duration": 2345000000,
-  "load_duration": 234000000,
-  "prompt_eval_count": 12,
-  "prompt_eval_duration": 500000000,
-  "eval_count": 89,
-  "eval_duration": 1611000000
+  "role": "user",
+  "content": "What's in this image?",
+  "images": ["data:image/png;base64,iVBOR..."]
 }
 ```
 
-**Response (Streaming - NDJSON):**
-```
-{"model":"deepseek-v4-pro","created_at":"2026-06-04T10:30:00Z","message":{"role":"assistant","content":"Rust"},"done":false}
-{"model":"deepseek-v4-pro","created_at":"2026-06-04T10:30:00Z","message":{"role":"assistant","content":" is"},"done":false}
-...
-{"model":"deepseek-v4-pro","created_at":"2026-06-04T10:30:00Z","message":{},"done":true,"total_duration":2345000000,"load_duration":234000000,"prompt_eval_count":12,"prompt_eval_duration":500000000,"eval_count":89,"eval_duration":1611000000}
-```
+> When using the OpenAI-compatible multi-part format, the proxy converts it to Ollama's `images` format automatically.
+
+**Diagnostic headers:** Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Upstream-Model`, `X-Proxy-Provider`.
 
 ---
 
-## Request/Response Examples
+## Image Support
 
-### Example 1: DeepSeek Reasoning Model with Streaming
+Vision-capable models (e.g. `kimi-k2.7-code-free`, `qwen3.7-plus`, `gemini-3.5-flash`) accept images as input. The proxy supports two formats:
 
-```bash
-curl -X POST http://localhost:11434/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-v4-pro",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Solve: 2x + 5 = 15"
-      }
-    ],
-    "stream": true,
-    "reasoning_effort": "medium",
-    "max_tokens": 8000
-  }'
+### OpenAI Format (multi-part content array)
+```json
+{
+  "role": "user",
+  "content": [
+    {"type": "text", "text": "What's in this image?"},
+    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+  ]
+}
 ```
 
-**Response Stream:**
-```
-data: {"choices":[{"delta":{"thinking":"Let me solve this equation..."},"finish_reason":null}]}
-data: {"choices":[{"delta":{"content":"The solution is x = 5"},"finish_reason":"stop"}]}
-data: [DONE]
-```
-
-### Example 2: OpenAI GPT-5 Multi-turn Conversation
-
-```bash
-curl -X POST http://localhost:11434/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-5",
-    "messages": [
-      {
-        "role": "user",
-        "content": "What is machine learning?"
-      },
-      {
-        "role": "assistant",
-        "content": "Machine learning is a subfield of artificial intelligence..."
-      },
-      {
-        "role": "user",
-        "content": "Give me a concrete example."
-      }
-    ],
-    "temperature": 0.5,
-    "max_tokens": 1000
-  }'
+### Ollama Format (images array)
+```json
+{
+  "role": "user",
+  "content": "What's in this image?",
+  "images": ["data:image/png;base64,..."]
+}
 ```
 
-### Example 3: Ollama Cloud with Options
-
-```bash
-curl -X POST http://localhost:11434/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "kimi-k2.7-code",
-    "messages": [
-      {"role": "user", "content": "summarize cloud computing"}
-    ],
-    "options": {
-      "temperature": 1.0,
-      "top_p": 0.95
-    },
-    "stream": false
-  }'
-```
+**Auto-conversion:** When using `/api/chat` (Ollama endpoint), the proxy automatically converts OpenAI multi-part content to Ollama's `images` array. When forwarding to OpenAI-compatible providers, it converts Ollama's `images` array to multi-part format.
 
 ---
 
@@ -480,14 +302,6 @@ curl -X POST http://localhost:11434/api/chat \
 }
 ```
 
-**401 Unauthorized** — Provider API key invalid/expired:
-```json
-{
-  "error": "Invalid API key for deepseek provider",
-  "code": "AUTH_FAILED"
-}
-```
-
 **502 Bad Gateway** — All provider candidates failed:
 ```json
 {
@@ -496,174 +310,51 @@ curl -X POST http://localhost:11434/api/chat \
 }
 ```
 
-**503 Service Unavailable** — No providers configured:
-```json
-{
-  "error": "no provider candidate available",
-  "code": "NO_PROVIDERS"
-}
-```
-
-### Retry Logic
-
-For streaming requests, if the upstream provider fails after headers are sent, the connection may terminate. Use exponential backoff for retries:
-
-```python
-import time
-backoff = 1
-for attempt in range(3):
-    try:
-        # Make request
-        break
-    except ConnectionError:
-        time.sleep(backoff)
-        backoff *= 2
-```
-
 ---
 
 ## Model Resolution
 
 ### How the Proxy Selects a Provider
 
-1. **Request arrives** with `model="kimi-k2.7-code"`
-2. **Proxy resolves** via `ProviderRegistry.ResolveModel()` (3-level hint resolution, see [ARCHITECTURE.md](ARCHITECTURE.md))
+1. **Request arrives** with model name
+2. **Proxy resolves** via `ProviderRegistry.ResolveModel()` (3-level hint resolution)
 3. **Candidate selection** via `ProviderRegistry.ResolveCandidates()`:
-   - For a bare id like `kimi-k2.7-code`, return every provider that offers it, ordered by `(priority asc, provider order asc)`. Tie-breaks go to the earliest-discovered provider.
-   - For a qualified id like `kimi-k2.7-code@moonshot`, return only that one candidate (no failover).
-4. **Failover**: If the primary candidate fails (non-streaming only), try the next candidate in priority order
-5. **Response**: Forward upgraded response in provider-neutral format
+   - Bare id like `glm-5.2-free`: returns every provider offering it, ordered by priority
+   - Qualified id like `z-ai/glm-5.2-free@zenmux`: returns only that provider (no failover)
+4. **Failover**: Non-streaming requests retry next candidate; streaming does not failover
+5. **Response**: forwarded with diagnostic headers
 
 ### 3-level `provider/model` hint resolution
 
-`ProviderRegistry.ResolveModel()` handles the OpenAI-style `provider/model` form by trying three strategies in order:
+`ProviderRegistry.ResolveModel()` handles the OpenAI-style `provider/model` form:
 
-1. **Verbatim** — full id exists in the registry (`nvidia/openai/gpt-oss-120b` → `openai/gpt-oss-120b`).
-2. **Strip prefix** — strip the provider prefix and look up the bare name (`groq/qwen3-32b` → `qwen3-32b`).
-3. **Suffix match within hinted provider** — find any upstream id owned by the hinted provider whose suffix equals the bare name (`nvidia/qwen3.5-397b-a17b` → NVIDIA's family-prefixed `qwen/qwen3.5-397b-a17b`). Must NOT cross providers.
-
-The third level is necessary because NVIDIA exposes many upstream ids with a `family/` prefix that isn't part of the model the user typed.
-
-### Supported Models by Provider
-
-See [CONFIGURATION.md](CONFIGURATION.md) for the complete per-provider model roster and customization.
+1. **Verbatim** — full id exists in the registry
+2. **Strip prefix** — strip the provider prefix and look up the bare name
+3. **Suffix match within hinted provider** — find any upstream id owned by the hinted provider whose suffix equals the bare name
 
 ---
 
 ## Force-Mode Parameter Override
 
-Some models have hard requirements that contradict what a client might send. The proxy handles this with the `override_client_params` flag on a model's `execution` block in `config/model-selection/{provider}.json`.
-
-### When force-mode applies
-
-The `override_client_params` field on `ModelExecutionConfig` accepts a boolean. When `true`, the proxy **overwrites** client-supplied `temperature` / `top_p` / `max_tokens` / `reasoning_effort` with the configured value (instead of only injecting defaults for missing fields). When `false` or absent (default), the proxy preserves client values and only injects for missing fields.
-
-### Real-world case: Moonshot Kimi K2.x
-
-The Kimi K2.7-code, K2.6, and K2.5 models reject any request where `temperature ≠ 1.0`. The proxy addresses this with two lines in `moonshot.json`:
-
-```json
-{
-  "match": "kimi-k2.7-code",
-  "priority": 1,
-  "enabled": true,
-  "execution": {
-    "temperature": 1.0,
-    "top_p": 0.95,
-    "max_tokens": 4096,
-    "override_client_params": true
-  }
-}
-```
-
-The client sends:
-```json
-{ "model": "kimi-k2.7-code", "temperature": 0.7, "messages": [...] }
-```
-
-The proxy rewrites the body before forwarding to Moonshot:
-```json
-{ "model": "kimi-k2.7-code", "temperature": 1.0, "max_tokens": 4096, "messages": [...] }
-```
-
-`RequestTransformer.ApplyExecutionDefaults()` is the function that performs this rewrite; the behaviour is exercised end-to-end by `OverrideClientParamsTests.cs` (10 tests covering both directions: force-mode overwrites, default-mode preserves).
-
-### Other models that benefit from force-mode
-
-Force-mode is currently enabled for:
-- Moonshot `kimi-k2.7-code`, `kimi-k2.6` and `kimi-k2.5` (the canonical temperature=1.0 case)
-- Ollama Cloud `kimi-k2.6` (inherits the moonshot rule — the Ollama Cloud variant of Kimi is just a passthrough to Moonshot's model)
-
-For any other model, leave `override_client_params` absent (or `false`) so the client retains control.
-
----
-
-## Reasoning Content Caching
-
-DeepSeek reasoning models (v4-pro, v4-flash) return `reasoning_content` alongside regular output. The proxy caches this for multi-turn conversations.
-
-### How It Works
-
-1. **DeepSeek reasoning response** arrives with:
-```json
-{
-  "choices": [{
-    "message": {
-      "thinking": "Let me think step by step...",
-      "content": "The answer is..."
-    }
-  }]
-}
-```
-
-2. **Proxy caches** the `thinking` content in `ReasoningCacheService`
-3. **Next user message** in conversation is augmented with:
-```json
-{
-  "role": "assistant",
-  "content": "The answer is...",
-  "_reasoning_context": "Let me think step by step..."
-}
-```
-
-4. **Subsequent DeepSeek calls** include cached reasoning for context continuity
-
-This enables true multi-turn reasoning without the cost of re-running reasoning on every turn.
+Some models have hard requirements. The proxy uses `override_client_params` for:
+- Moonshot `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5` (mandates `temperature=1.0`)
+- Ollama Cloud `kimi2.7-code`, `kimi-k2.6`
+- ZenMux `kimi-k2.7-code-free` (mirrors the Kimi force-mode rule)
 
 ---
 
 ## Authentication & Security
 
-### API Key Management
-
-- **Proxy does NOT validate incoming API keys** — it passes them through to upstream providers
-- **Upstream API keys are set via environment variables**:
-  - `PROVIDER_DEEPSEEK_API_KEY`
-  - `PROVIDER_OPENAI_API_KEY`
-  - `PROVIDER_NVIDIA_API_KEY`
-  - `PROVIDER_OPENROUTER_API_KEY`
-  - `PROVIDER_GROQ_API_KEY`
-  - `PROVIDER_OLLAMACLOUD_API_KEY`
-  - `PROVIDER_MOONSHOT_API_KEY`
-  - `PROVIDER_CEREBRAS_API_KEY`
-
-- **No authentication required** for clients connecting to the proxy (suitable for trusted networks only)
-
-### Recommended Security Measures
-
-- Run the proxy on a **private network or VPN**
-- Use **network-level authentication** (e.g., mutual TLS, firewall rules)
-- Monitor **provider rate limits** to detect abuse
-- Rotate **upstream API keys regularly**
-
----
-
-## Performance Characteristics
-
-- **Latency**: < 10 ms overhead per request (pass-through streaming)
-- **Throughput**: Up to 256 concurrent connections per provider
-- **Memory**: ~50-100 MB baseline; scales with concurrent requests
-- **Streaming**: Zero-copy pass-through; minimal buffering
+Provider API keys are set via environment variables:
+- `PROVIDER_DEEPSEEK_API_KEY`
+- `PROVIDER_OPENAI_API_KEY`
+- `PROVIDER_NVIDIA_API_KEY`
+- `PROVIDER_OPENROUTER_API_KEY`
+- `PROVIDER_GROQ_API_KEY`
+- `PROVIDER_OLLAMACLOUD_API_KEY`
+- `PROVIDER_MOONSHOT_API_KEY`
+- `PROVIDER_CEREBRAS_API_KEY`
+- `PROVIDER_ZENMUX_API_KEY`
 
 ---
 
@@ -677,12 +368,67 @@ This enables true multi-turn reasoning without the cost of re-running reasoning 
 | VS 2026 BYOM | `/api/*` | Ollama | ✅ Fully supported |
 | Native Ollama Client | `/api/*` | Ollama | ✅ Fully supported |
 | OpenAI SDK | `/v1/*` | OpenAI | ✅ Fully supported |
+## Usage Dashboard
 
----
+The proxy includes a real-time usage dashboard with cost tracking, latency metrics, and LLM Arena performance data.
 
-## Related Documentation
+### Endpoints
 
-- [CONFIGURATION.md](CONFIGURATION.md) — Provider setup and model defaults
-- [ARCHITECTURE.md](ARCHITECTURE.md) — System design and components
-- [TESTING.md](TESTING.md) — Test coverage and validation
-- [DEPLOYMENT.md](DEPLOYMENT.md) — Docker and production deployment
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/usage` | Full JSON report: cost, latency, tokens per model, Arena data |
+| GET | `/usage/summary` | Text summary for quick terminal view |
+| GET | `/usage/pricing` | Complete price catalog with Arena scores |
+| POST | `/usage/reset` | Reset all counters (admin) |
+
+### `/usage` Response Example
+
+```json
+{
+  "total_cost_usd": 0.1234,
+  "models": [
+    {
+      "provider": "zai",
+      "model": "glm-5.2",
+      "tier": "paid",
+      "requests": 47,
+      "success_rate_pct": 95.7,
+      "latency_avg_ms": 1840,
+      "tokens_in": 150588,
+      "tokens_out": 38164,
+      "cost_usd": 0.118,
+      "arena": { "elo": 1481, "webdev": 1593, "agent_win_rate_pct": 4.4 }
+    }
+  ]
+}
+```
+
+### `/usage/pricing`
+
+Returns the full pricing catalog with official provider costs, LLM Arena scores, and estimated tokens/second for each model.
+
+### Logging
+
+When `PROXY_LOG_LEVEL=info`, each request is logged with:
+
+```
+[HH:mm:ss] REQ  model -> provider (1/1 candidates)
+[HH:mm:ss] OK   provider/model 200 1840ms in:3204 out:812 $0.0078 [Arena:1481]
+[HH:mm:ss] FAIL provider/model 429 2103ms
+```
+
+### Economics
+
+The dashboard enables data-driven provider decisions:
+- **Real cost per model**: actual tokens used x official pricing
+- **Success rate**: which providers/models are reliable
+- **Latency**: avg/min/max per provider per model
+- **Arena comparison**: ELO, WebDev, Agent win rates for context
+- **Weekly/monthly projections**: extrapolate from actual usage
+
+### Configuration (.env)
+
+```
+PROXY_LOG_LEVEL=info          # info|debug|warn|error|none
+PROXY_LOG_FILE=               # path to log file (empty = console only)
+```

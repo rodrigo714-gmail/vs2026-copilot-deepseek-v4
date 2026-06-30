@@ -19,7 +19,8 @@ internal static class OllamaEndpoints
 
         app.MapGet("/api/tags", async (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore) =>
         {
-            await modelCatalog.RefreshAvailableModelsIfNeeded(ctx.RequestAborted);
+            // Fire-and-forget refresh to avoid blocking first request (VS 2026 BYOM times out).
+            _ = modelCatalog.RefreshAvailableModelsIfNeeded(CancellationToken.None);
 
             // Keep the configured default model visible even if provider discovery fails.
             modelCatalog.EnsureDefaultModelPresent(ctx.RequestAborted);
@@ -85,12 +86,16 @@ internal static class OllamaEndpoints
                     string providerPrefix = x.Provider.ToUpperInvariant();
                     string displayName = $"{providerPrefix} - {x.DisplayModel}";
                     string routedModel = x.Model;
+                    // Use a provider-qualified alias so that when the client sends this back
+                    // as the model name, the proxy routes it uniquely to the correct provider
+                    // instead of falling back to the default (e.g. DeepSeek).
+                    string qualifiedModel = $"{routedModel}@{x.Provider}:latest";
 
                     (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(routedModel);
                     return new
                     {
                         name = displayName + ":latest",
-                        model = routedModel + ":latest",
+                        model = qualifiedModel,
                         modified_at = DateTime.UtcNow.ToString("o"),
                         size = 3_826_793_677L,
                         digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -148,7 +153,8 @@ internal static class OllamaEndpoints
             ModelCatalogService modelCatalog,
             ChatStreamingService chatStreaming,
             ReasoningCacheService reasoningCache,
-            RequestTransformer requestTransformer) =>
+            RequestTransformer requestTransformer,
+            UsageTrackerService usageTracker) =>
         {
             CancellationToken ct = ctx.RequestAborted;
             await modelCatalog.RefreshAvailableModelsIfNeeded(ct);
@@ -160,10 +166,26 @@ internal static class OllamaEndpoints
 
             string ollamaRequestedModel = root.TryGetProperty("model", out JsonElement om) && om.ValueKind == JsonValueKind.String
                 ? om.GetString()! : providerRegistry.DefaultModel;
+
+            // ── Detailed routing log ──────────────────────────────────────
+            Console.WriteLine($"[ROUTE] Received model='{ollamaRequestedModel}' stream={isStream}");
+
             string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
+            Console.WriteLine($"[ROUTE] Resolved model='{ollamaEffectiveModel}'");
+
             string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
+            Console.WriteLine($"[ROUTE] Upstream model='{ollamaUpstreamModel}'");
+
             ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
+            Console.WriteLine($"[ROUTE] Provider='{ollamaProvider.Name}' BaseUrl='{ollamaProvider.Client.BaseAddress}' ChatPath='{ollamaProvider.Capabilities.ChatPath}'");
+
             ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
+
+            // ── Diagnostic headers ───────────────────────────────────────
+            ctx.Response.Headers["X-Proxy-Requested-Model"] = ollamaRequestedModel;
+            ctx.Response.Headers["X-Proxy-Resolved-Model"] = ollamaEffectiveModel;
+            ctx.Response.Headers["X-Proxy-Upstream-Model"] = ollamaUpstreamModel;
+            ctx.Response.Headers["X-Proxy-Provider"] = ollamaProvider.Name;
 
             using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(ollamaEffectiveModel, ct);
             CancellationToken ollamaCt = ollamaTimeoutCts?.Token ?? ct;
@@ -173,17 +195,23 @@ internal static class OllamaEndpoints
             {
                 string upstreamBody = ReplaceModelInOllamaRequestBody(body, ollamaUpstreamModel);
 
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
                 if (!isStream)
                 {
                     using StringContent ollamaContent = new(upstreamBody, Encoding.UTF8, "application/json");
                     using HttpResponseMessage ollamaResp = await ollamaProvider.Client.SendAsync(
                         new HttpRequestMessage(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = ollamaContent }, ollamaCt);
+                    sw.Stop();
                     string ollamaRespBody = await ollamaResp.Content.ReadAsStringAsync(ct);
                     // Fallback: copy `thinking` into `content` for reasoning models that leave content empty.
                     ollamaRespBody = EnsureOllamaContentFromThinking(ollamaRespBody);
                     ctx.Response.StatusCode = (int)ollamaResp.StatusCode;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(ollamaRespBody, ct);
+
+                    // Track usage for Ollama Cloud response
+                    RecordOllamaUsage(usageTracker, ollamaProvider.Name, ollamaRespBody, ollamaResp.Headers, ollamaResp.TrailingHeaders, sw.ElapsedMilliseconds, ollamaEffectiveModel);
                     return;
                 }
 
@@ -195,6 +223,7 @@ internal static class OllamaEndpoints
                 using HttpRequestMessage ollamaStreamReq = new(HttpMethod.Post, "api/chat") { Content = ollamaStreamContent };
                 using HttpResponseMessage ollamaStreamResp = await ollamaProvider.Client.SendAsync(
                     ollamaStreamReq, HttpCompletionOption.ResponseHeadersRead, ollamaCt);
+                sw.Stop();
 
                 if (!ollamaStreamResp.IsSuccessStatusCode)
                 {
@@ -202,9 +231,15 @@ internal static class OllamaEndpoints
                     ctx.Response.StatusCode = (int)ollamaStreamResp.StatusCode;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(errBody, ct);
+
+                    usageTracker.RecordError(ollamaProvider.Name, $"HTTP {(int)ollamaStreamResp.StatusCode}", ((int)ollamaStreamResp.StatusCode).ToString(), sw.ElapsedMilliseconds);
                     return;
                 }
 
+                // Track request + rate-limit headers for streaming
+                double cost = PricingCalculator.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
+                usageTracker.RecordRequest(ollamaProvider.Name, 0, 0, 0, null, sw.ElapsedMilliseconds, cost);
+                RecordOllamaRateLimitHeaders(usageTracker, ollamaProvider.Name, ollamaStreamResp.Headers, ollamaStreamResp.TrailingHeaders);
                 await chatStreaming.StreamNdjsonPassthrough(ollamaStreamResp, ctx.Response, ct);
                 return;
             }
@@ -227,22 +262,29 @@ internal static class OllamaEndpoints
             openAiBody = requestTransformer.ApplyExecutionDefaults(openAiBody, ollamaEffectiveModel, ollamaProvider.Capabilities);
 
             using StringContent reqContent = new(openAiBody, Encoding.UTF8, "application/json");
+            var sw2 = System.Diagnostics.Stopwatch.StartNew();
 
             if (!isStream)
             {
                 using HttpResponseMessage resp = await ollamaProvider.Client.SendAsync(
                     new HttpRequestMessage(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = reqContent }, ollamaCt);
+                sw2.Stop();
                 string respBody = await resp.Content.ReadAsStringAsync(ct);
 
                 if (!resp.IsSuccessStatusCode)
                 {
+                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' HTTP={(int)resp.StatusCode} Body='{respBody}'");
                     ctx.Response.StatusCode = (int)resp.StatusCode;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(respBody, ct);
+
+                    usageTracker.RecordError(ollamaProvider.Name, $"HTTP {(int)resp.StatusCode}", ((int)resp.StatusCode).ToString(), sw2.ElapsedMilliseconds);
                     return;
                 }
 
                 reasoningCache.CacheReasoningFromResponse(respBody);
+                // Track usage from the OpenAI-format response
+                RecordOllamaOpenAiUsage(usageTracker, ollamaProvider.Name, respBody, resp.Headers, resp.TrailingHeaders, sw2.ElapsedMilliseconds, ollamaEffectiveModel);
 
                 using JsonDocument odoc = JsonDocument.Parse(respBody);
                 JsonElement msg = odoc.RootElement.GetProperty("choices")[0].GetProperty("message");
@@ -278,16 +320,24 @@ internal static class OllamaEndpoints
 
                 using HttpResponseMessage upstreamResp = await ollamaProvider.Client.SendAsync(
                     upstreamReq, HttpCompletionOption.ResponseHeadersRead, ollamaCt);
+                sw2.Stop();
 
                 if (!upstreamResp.IsSuccessStatusCode)
                 {
                     string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
+                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' (stream) HTTP={(int)upstreamResp.StatusCode} Body='{errBody}'");
                     ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(errBody, ct);
+
+                    usageTracker.RecordError(ollamaProvider.Name, $"HTTP {(int)upstreamResp.StatusCode}", ((int)upstreamResp.StatusCode).ToString(), sw2.ElapsedMilliseconds);
                     return;
                 }
 
+                // Track request + rate-limit headers for streaming Ollama→OpenAI
+                double cost = PricingCalculator.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
+                usageTracker.RecordRequest(ollamaProvider.Name, 0, 0, 0, null, sw2.ElapsedMilliseconds, cost);
+                RecordOllamaRateLimitHeaders(usageTracker, ollamaProvider.Name, upstreamResp.Headers, upstreamResp.TrailingHeaders);
                 await chatStreaming.StreamOllamaAndCache(upstreamResp, ctx.Response, ollamaEffectiveModel, ct);
             }
         });
@@ -469,6 +519,107 @@ internal static class OllamaEndpoints
         {
             return rawBody;
         }
+    }
+
+    /// <summary>
+    /// Records usage from an Ollama-format response body (non-streaming).
+    /// Parses <c>prompt_eval_count</c> and <c>eval_count</c>.
+    /// </summary>
+    private static void RecordOllamaUsage(
+        UsageTrackerService usageTracker,
+        string providerName,
+        string responseBody,
+        HttpHeaders responseHeaders,
+        HttpHeaders? trailingHeaders,
+        long latencyMs = 0,
+        string model = "")
+    {
+        var headers = CollectHeadersDict(responseHeaders, trailingHeaders);
+
+        long promptTokens = 0, completionTokens = 0, totalTokens = 0;
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("prompt_eval_count", out JsonElement pec) && pec.ValueKind == JsonValueKind.Number)
+                promptTokens = pec.GetInt64();
+            if (root.TryGetProperty("eval_count", out JsonElement ec) && ec.ValueKind == JsonValueKind.Number)
+                completionTokens = ec.GetInt64();
+            if (promptTokens > 0 || completionTokens > 0)
+                totalTokens = promptTokens + completionTokens;
+        }
+        catch { }
+
+        double cost = (promptTokens > 0 || completionTokens > 0) ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
+    }
+
+    /// <summary>
+    /// Records usage from an OpenAI-format response body reached via the Ollama endpoint path.
+    /// </summary>
+    private static void RecordOllamaOpenAiUsage(
+        UsageTrackerService usageTracker,
+        string providerName,
+        string responseBody,
+        HttpHeaders responseHeaders,
+        HttpHeaders? trailingHeaders,
+        long latencyMs = 0,
+        string model = "")
+    {
+        var headers = CollectHeadersDict(responseHeaders, trailingHeaders);
+
+        long promptTokens = 0, completionTokens = 0, totalTokens = 0;
+        bool hasUsage = false;
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("usage", out JsonElement usage))
+            {
+                if (usage.TryGetProperty("prompt_tokens", out JsonElement pt) && pt.ValueKind == JsonValueKind.Number)
+                { promptTokens = pt.GetInt64(); hasUsage = true; }
+                if (usage.TryGetProperty("completion_tokens", out JsonElement ct) && ct.ValueKind == JsonValueKind.Number)
+                { completionTokens = ct.GetInt64(); hasUsage = true; }
+                if (usage.TryGetProperty("total_tokens", out JsonElement tt) && tt.ValueKind == JsonValueKind.Number)
+                { totalTokens = tt.GetInt64(); hasUsage = true; }
+                if (totalTokens == 0 && promptTokens > 0 && completionTokens > 0)
+                    totalTokens = promptTokens + completionTokens;
+            }
+        }
+        catch { }
+
+        double cost = hasUsage ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
+    }
+
+    /// <summary>
+    /// Records rate-limit headers from upstream response headers (for streaming paths).
+    /// </summary>
+    private static void RecordOllamaRateLimitHeaders(
+        UsageTrackerService usageTracker,
+        string providerName,
+        HttpHeaders responseHeaders,
+        HttpHeaders? trailingHeaders)
+    {
+        var headers = CollectHeadersDict(responseHeaders, trailingHeaders);
+        if (headers.Count > 0)
+            usageTracker.RecordRateLimitHeaders(providerName, headers);
+    }
+
+    /// <summary>
+    /// Collects HTTP headers into a dictionary for rate-limit extraction.
+    /// </summary>
+    private static Dictionary<string, string?> CollectHeadersDict(HttpHeaders responseHeaders, HttpHeaders? trailingHeaders)
+    {
+        var headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var h in responseHeaders)
+            headers[h.Key] = string.Join(", ", h.Value);
+        if (trailingHeaders is not null)
+        {
+            foreach (var h in trailingHeaders)
+                headers[h.Key] = string.Join(", ", h.Value);
+        }
+        return headers;
     }
 
     /// <summary>

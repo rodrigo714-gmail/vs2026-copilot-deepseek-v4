@@ -1,0 +1,605 @@
+=== GOOGLE GEMINI API - MODELOS Y PRECIOS ===
+Fuente: https://ai.google.dev/gemini-api/docs/pricing?hl=es-419
+Fecha de extraccion: 2026-06-16
+
+### Gemini 3.5 Flash
+  Code: gemini-3.5-flash
+  Descripcion: Nuestro modelo m?s inteligente, creado para ofrecer velocidad, que combina inteligencia de vanguardia con capacidades superiores de b?squeda y fundamentaci?n.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | $1.50
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 9.00
+    Precio del almacenamiento de contexto en cach? | Sin costo | USD 0.15 | USD 1.00 por cada 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | $0.75
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $4.50
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.075 | USD 1.00 / 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | $0.75
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $4.50
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.08 | USD 1.00 / 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | $2.70
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 16.20
+    Precio del almacenamiento de contexto en cach? | Sin costo | USD 0.27 | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 3.5 Live Translate
+  Code: gemini-3.5-live-translate-preview
+  Descripcion: Nuestro modelo de traducci?n de voz a voz en tiempo real y de baja latencia que admite m?s de 70 idiomas.
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 3.50 o USD 0.0053 por minuto* (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 21.00 o USD 0.0315 por minuto* (audio)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 3.1 Flash-Lite
+  Code: gemini-3.1-flash-lite
+  Descripcion: Nuestro modelo m?s rentable, optimizado para tareas de agentes de gran volumen, traducci?n y procesamiento de datos simple.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.25 (texto, imagen o video) | USD 0.50 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $1.50
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.025 (texto, imagen o video) | USD 0.05 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.125 (texto, imagen o video) | USD 0.25 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $0.75
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.0125 (texto, imagen o video) | USD 0.025 (audio) | USD 0.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.125 (texto, imagen o video) | USD 0.25 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $0.75
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.0125 (texto, imagen o video) | USD 0.025 (audio) | USD 0.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.45 (texto, imagen o video) | USD 0.90 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $2.70
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.045 (texto, imagen o video) | USD 0.09 (audio) | USD 1.80 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini 3.1 Pro
+  Code: gemini-3.1-pro-preview
+  Descripcion: Las mejoras m?s recientes en rendimiento, inteligencia y usabilidad de la mejor familia de modelos del mundo para la comprensi?n multimodal, las capacidades de agente y el vibe coding.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 2.00, instrucciones &lt;= 200,000 tokens | USD 4.00, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | USD 12.00, instrucciones &lt;= 200,000 tokens | USD 18.00, instrucciones > 200,000 tokens
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.20, instrucciones &lt;= 200 000 tokens | USD 0.40, instrucciones > 200 000 tokens | USD 4.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 1.00, instrucciones &lt;= 200,000 tokens | USD 2.00, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | USD 6.00, instrucciones &lt;= 200,000 tokens | USD 9.00, instrucciones > 200,000
+    Precio del almacenamiento de contexto en cach? | No disponible | Igual que Est?ndar | USD 0.20, instrucciones &lt;= 200 000 tokens | USD 0.40, instrucciones > 200 000 tokens | USD 4.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 1.00, instrucciones &lt;= 200,000 tokens | USD 2.00, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | USD 6.00, instrucciones &lt;= 200,000 tokens | USD 9.00, instrucciones > 200,000
+    Precio del almacenamiento de contexto en cach? | No disponible | Igual que Est?ndar | USD 0.20, instrucciones &lt;= 200 000 tokens | USD 0.40, instrucciones > 200 000 tokens | USD 4.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 3.60, instrucciones &lt;= 200,000 tokens | USD 7.20, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | USD 21.60, instrucciones &lt;= 200,000 tokens | USD 32.40, instrucciones > 200,000
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.36, instrucciones &lt;= 200,000 tokens | USD 0.72, instrucciones > 200,000 tokens | USD 8.10 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini 3.1 Flash Live
+  Code: gemini-3.1-flash-live-preview
+  Descripcion: Nuestro modelo de audio a audio de baja latencia est? optimizado para el di?logo en tiempo real con detecci?n de matices ac?sticos, precisi?n num?rica y conciencia multimodal.
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.75 (texto) | USD 3.00 o USD 0.005 por minuto (audio) | USD 1.00 o USD 0.002 por minuto (imagen o video)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 4.50 (texto) | USD 12.00 o USD 0.018/min (audio)
+    Fundamentaci?n con la B?squeda de Google* | Compatible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 3.1 Flash Image ?
+  Code: gemini-3.1-flash-image
+  Descripcion: Dise?ado para brindar velocidad y eficiencia, el modelo de generaci?n de im?genes Gemini 3.1 Flash es eficaz para obtener respuestas r?pidas e interactivas, y una alta capacidad de procesamiento.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.50 (texto/imagen)
+    Precio de salida | No disponible | USD 3 (texto y pensamiento) | USD 60.00 (im?genes) | Equivalente a USD 0.045 por cada 500 im?genes* | USD 0.067 por cada 1,000 im?genes*, USD 0.101 por cada 2,000 im?genes*, y USD 0.151 por cada 4,000 im?genes*.
+    Fundamentaci?n con la B?squeda de Google** | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas para la fundamentaci?n basada en texto e im?genes.
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.25 (texto, imagen)
+    Precio de salida | No disponible | USD 1.50 (texto y pensamiento) | USD 30.00 (im?genes) | Equivalente a USD 0.022 por cada 500 im?genes* | USD 0.034 por cada 1,000 im?genes*, | USD 0.050 por cada 2,000 im?genes*, | y USD 0.076 por cada 4,000 im?genes*.
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de TTS de Gemini 3.1 Flash
+  Code: gemini-3.1-flash-tts-preview
+  Descripcion: Nuestro modelo de audio de Text-to-Speech de Flash 3.1 est? optimizado para la generaci?n de voz controlable, de baja latencia y con un rendimiento rentable.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 1.00 (texto)
+    Precio de salida | Sin costo | USD 20.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.50 (texto)
+    Precio de salida | No disponible | USD 10.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini 3 Flash
+  Code: gemini-3-flash-preview
+  Descripcion: Nuestro modelo m?s inteligente, creado para ofrecer velocidad, que combina inteligencia de vanguardia con capacidades superiores de b?squeda y fundamentaci?n.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.50 (texto, imagen o video) | USD 1.00 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $3.00
+    Precio del almacenamiento de contexto en cach? | Sin costo | USD 0.05 (texto, imagen o video) | USD 0.10 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.25 (texto, imagen o video) | USD 0.50 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $1.50
+    Precio del almacenamiento de contexto en cach? | No disponible | Igual que Est?ndar | USD 0.05 (texto, imagen o video) | USD 0.10 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.25 (texto, imagen o video) | USD 0.50 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $1.50
+    Precio del almacenamiento de contexto en cach? | No disponible | Igual que Est?ndar | USD 0.05 (texto, imagen o video) | USD 0.10 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 solicitudes por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.90 (texto, imagen o video) | USD 1.80 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $5.40
+    Precio del almacenamiento de contexto en cach? | Sin costo | USD 0.09 (texto, imagen o video) | USD 0.18 (audio) | USD 1.80 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google* | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Fundamentaci?n con Google Maps | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 3 Pro Image ?
+  Code: gemini-3-pro-image
+  Descripcion: Nuestro modelo de generaci?n de im?genes nativo, optimizado para la velocidad, la flexibilidad y la comprensi?n contextual. La entrada y salida de texto tienen el mismo precio que Gemini 3.1 Pro.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 2.00 (texto/imagen), | equivalente a USD 0.0011 por imagen*
+    Precio de salida | No disponible | USD 12.00 (texto y pensamiento) | USD 120.00 (im?genes) | Equivalente a USD 0.134 por imagen de 1K/2K** | y USD 0.24 por imagen de 4K**
+    Fundamentaci?n con la B?squeda de im?genes y la B?squeda web de Google*** | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 1.00 (texto), | USD 0.0006 (imagen)*
+    Precio de salida | No disponible | USD 6.00 (texto y pensamiento) | USD 0.067 por imagen de 1 K/2 K** | USD 0.12 por imagen de 4 K**
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 1.00 (texto), | USD 0.0006 (imagen)*
+    Precio de salida | No disponible | USD 6.00 (texto y pensamiento) | USD 0.067 por imagen de 1 K/2 K** | USD 0.12 por imagen de 4 K**
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 3.60 (texto o imagen)
+    Precio de salida | No disponible | USD 21.60 (texto y pensamiento) | USD 216.00 (im?genes)
+    Fundamentaci?n con la B?squeda de im?genes y la B?squeda web de Google*** | No disponible | 5,000 instrucciones por mes (gratis, compartidas en Gemini 3) y, luego, USD 14 por cada 1,000 b?squedas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 2.5 Pro
+  Code: gemini-2.5-pro
+  Descripcion: Nuestro modelo polivalente de vanguardia, que se destaca en la programaci?n y las tareas de razonamiento complejas.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 1.25, instrucciones &lt;= 200 000 tokens | USD 2.50, instrucciones > 200 000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 10.00, instrucciones &lt;= 200 000 tokens | USD 15.00, instrucciones > 200 000 tokens
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.125, instrucciones &lt;= 200 000 tokens | USD 0.25, instrucciones > 200 000 tokens | USD 4.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | 10,000 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.625, instrucciones &lt;= 200,000 tokens | USD 1.25, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | USD 5.00, instrucciones &lt;= 200 000 tokens | USD 7.50, instrucciones > 200 000 tokens
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.125, instrucciones &lt;= 200 000 tokens | USD 0.25, instrucciones > 200 000 tokens | USD 4.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.625, instrucciones &lt;= 200,000 tokens | USD 1.25, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | USD 5.00, instrucciones &lt;= 200 000 tokens | USD 7.50, instrucciones > 200 000 tokens
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.125, instrucciones &lt;= 200 000 tokens | USD 0.25, instrucciones > 200 000 tokens | USD 4.50 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 2.25, instrucciones &lt;= 200,000 tokens | USD 4.50, instrucciones > 200,000 tokens
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 18.00, instrucciones &lt;= 200,000 tokens | USD 27.00, instrucciones > 200,000 tokens
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.225, instrucciones &lt;= 200,000 tokens | USD 0.45, instrucciones > 200,000 tokens | USD 8.10 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | 10,000 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 2.5 Flash
+  Code: gemini-2.5-flash
+  Descripcion: Nuestro primer modelo de razonamiento h?brido que admite una ventana de contexto de 1 mill?n de tokens y tiene presupuestos de pensamiento.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.30 (texto, imagen o video) | USD 1.00 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $2.50
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.03 (texto, imagen o video) | USD 0.1 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | Sin cargo, hasta 500 RPD (l?mite compartido con los RPD de Flash-Lite) | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash-Lite) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | 500 RPD | 1,500 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.15 (texto, imagen o video) | USD 0.50 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $1.25
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.03 (texto, imagen o video) | USD 0.1 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash-Lite) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.15 (texto, imagen o video) | USD 0.50 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $1.25
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.03 (texto, imagen o video) | USD 0.1 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash-Lite) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.54 (texto, imagen o video) | USD 1.80 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $4.50
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.054 (texto, imagen o video) | USD 0.18 (audio) | USD 1.80 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | Sin cargo, hasta 500 RPD (l?mite compartido con los RPD de Flash-Lite) | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash-Lite) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | 500 RPD | 1,500 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 2.5 Flash-Lite
+  Code: gemini-2.5-flash-lite
+  Descripcion: Es nuestro modelo m?s peque?o y rentable, dise?ado para el uso a gran escala.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada (texto, imagen, video) | Sin costo | USD 0.10 (texto, imagen o video) | USD 0.30 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $0.40
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.01 (texto, imagen o video) | USD 0.03 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | Sin cargo, hasta 500 RPD (l?mite compartido con Flash RPD) | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash); luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | 500 RPD | 1,500 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada (texto, imagen, video) | No disponible | USD 0.05 (texto, imagen o video) | USD 0.15 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $0.20
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.01 (texto, imagen o video) | USD 0.03 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash); luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada (texto, imagen, video) | No disponible | USD 0.05 (texto, imagen o video) | USD 0.15 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $0.20
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.01 (texto, imagen o video) | USD 0.03 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash); luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada (texto, imagen, video) | Sin costo | USD 0.18 (texto, imagen o video) | USD 0.54 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $0.72
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.018 (texto, imagen o video) | USD 0.054 (audio) | USD 1.80 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | Sin cargo, hasta 500 RPD (l?mite compartido con Flash RPD) | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash); luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | 500 RPD | 1,500 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini 2.5 Flash-Lite
+  Code: gemini-2.5-flash-lite-preview-09-2025
+  Descripcion: El modelo m?s reciente basado en Gemini 2.5 Flash Lite, optimizado para la rentabilidad, la alta capacidad de procesamiento y la alta calidad.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada (texto, imagen, video) | Sin costo | USD 0.10 (texto, imagen o video) | USD 0.30 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | $0.40
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.01 (texto, imagen o video) | USD 0.03 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | Sin cargo, hasta 500 RPD (l?mite compartido con Flash RPD) | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash); luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada (texto, imagen, video) | No disponible | USD 0.05 (texto, imagen o video) | USD 0.15 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $0.20
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.01 (texto, imagen o video) | USD 0.03 (audio) | USD 1.00 por 1,000,000 de tokens por hora (precio de almacenamiento)
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis, l?mite compartido con los RPD de Flash); luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+
+### Audio nativo de Gemini 2.5 Flash (API de Live)
+  Code: gemini-2.5-flash-native-audio-preview-12-2025
+  Descripcion: Nuestros modelos de audio nativos de la API de Live est?n optimizados para obtener salidas de audio de mayor calidad con mejor ritmo, naturalidad de la voz, verbosidad y estado de ?nimo.
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.50 (texto) | USD 3.00 (audio o video)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 2.00 (texto) | USD 12.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 2.5 Flash Image ?
+  Code: gemini-2.5-flash-image
+  Descripcion: Nuestro modelo de generaci?n de im?genes nativo, optimizado para la velocidad, la flexibilidad y la comprensi?n contextual. La entrada y salida de texto tienen el mismo precio que 2.5 Flash.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.30 (texto o imagen)
+    Precio de salida | No disponible | USD 0.039 por imagen*
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.15 (texto o imagen)
+    Precio de salida | No disponible | USD 0.0195 por imagen*
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.15 (texto o imagen)
+    Precio de salida | No disponible | USD 0.0195 por imagen*
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.54 (texto o imagen)
+    Precio de salida | No disponible | USD 0.0702 por imagen*
+    Se usa para mejorar nuestros productos | S? | No
+
+### TTS de la versi?n preliminar de Gemini 2.5 Flash
+  Code: gemini-2.5-flash-preview-tts
+  Descripcion: Nuestro modelo de audio de texto a voz 2.5 Flash est? optimizado para la generaci?n de voz controlable, de baja latencia y con un buen rendimiento en relaci?n con el precio.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.50 (texto)
+    Precio de salida | Sin costo | USD 10.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.25 (texto)
+    Precio de salida | No disponible | USD 5.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini 2.5 Pro TTS
+  Code: gemini-2.5-pro-preview-tts
+  Descripcion: Nuestro modelo de audio de texto a voz 2.5 Pro est? optimizado para la generaci?n de voz potente y de baja latencia, lo que permite obtener resultados m?s naturales y facilita la direcci?n de las instrucciones.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 1.00 (texto)
+    Precio de salida | No disponible | USD 20.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.50 (texto)
+    Precio de salida | No disponible | USD 10.00 (audio)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 2.0 Flash
+  Code: gemini-2.0-flash
+  Descripcion: [*] El precio de la salida de im?genes es de USD?30 por 1,000,000 de tokens. Las im?genes de salida de hasta 1,024???1,024?px consumen 1,290 tokens y equivalen a USD?0.039 por imagen.
+  STATUS: ** OBSOLETO / DEPRECADO **
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 0.10 (texto, imagen o video) | USD 0.70 (audio)
+    Precio de salida | Sin costo | $0.40
+    Precio del almacenamiento de contexto en cach? | Sin costo | USD 0.025 por 1,000,000 de tokens (texto, imagen o video) | USD 0.175 por 1,000,000 de tokens (audio)
+    Almacenamiento de contexto en cach? | No disponible | USD 1.00 / 1,000,000 de tokens por hora
+    Precios de la generaci?n de im?genes | No disponible (cerrado) | No disponible (cerrado)
+    Precio de la adaptaci?n | No disponible | No disponible
+    Fundamentaci?n con la B?squeda de Google | Sin cargo, hasta 500 RPD | 1,500 RPD (gratis) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | 500 RPD | 1,500 RPD (gratis) y, luego, USD 25 por cada 1,000 instrucciones fundamentadas
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.05 (texto, imagen o video) | USD 0.35 (audio)
+    Precio de salida | No disponible | $0.20
+    Precio del almacenamiento de contexto en cach? | No disponible | USD 0.025 por 1,000,000 de tokens (texto, imagen o video) | USD 0.175 por 1,000,000 de tokens (audio)
+    Almacenamiento de contexto en cach? | No disponible | USD 1.00 / 1,000,000 de tokens por hora
+    Precios de la generaci?n de im?genes | No disponible (cerrado) | No disponible (cerrado)
+    Precio de la adaptaci?n | No disponible | No disponible
+    Fundamentaci?n con la B?squeda de Google | No disponible | 1,500 RPD (gratis) y, luego, USD 35 por cada 1,000 instrucciones fundamentadas
+    Fundamentaci?n con Google Maps | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini 2.0 Flash-Lite
+  Code: gemini-2.0-flash-lite
+  Descripcion: (no description)
+  STATUS: ** OBSOLETO / DEPRECADO **
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | $0.075
+    Precio de salida | Sin costo | $0.30
+    Precio del almacenamiento de contexto en cach? | No disponible | No disponible
+    Almacenamiento de contexto en cach? | No disponible | No disponible
+    Precio de la adaptaci?n | No disponible | No disponible
+    Fundamentaci?n con la B?squeda de Google | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | $0.0375
+    Precio de salida | No disponible | $0.15
+    Precio del almacenamiento de contexto en cach? | No disponible | No disponible
+    Almacenamiento de contexto en cach? | No disponible | No disponible
+    Precio de la adaptaci?n | No disponible | No disponible
+    Fundamentaci?n con la B?squeda de Google | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+
+### Imagen 4
+  Code: imagen-4.0-generate-001
+  Descripcion: Nuestro modelo de generaci?n de im?genes m?s reciente, con una renderizaci?n de texto significativamente mejor y una mejor calidad general de la imagen.
+  STATUS: ** OBSOLETO / DEPRECADO **
+     | Nivel gratuito | Nivel de pago, por imagen en USD
+    Precio de Imagen 4 Fast | No disponible | $0.02
+    Precio de la imagen est?ndar de Imagen 4 | No disponible | $0.04
+    Precio de la imagen de Imagen 4 Ultra | No disponible | $0.06
+    Se usa para mejorar nuestros productos | S? | No
+
+### Veo 3.1
+  Code: veo-3.1-generate-preview
+  Descripcion: Nuestro modelo de generaci?n de videos m?s reciente, disponible para los desarrolladores en el nivel pagado de la API de Gemini.
+     | Nivel gratuito | Nivel de pago, por segundo en USD
+    Precio predeterminado del video est?ndar de Veo 3.1 con audio | No disponible | USD 0.40 (720p y 1080p) | USD 0.60 (4K)
+    Precio predeterminado de video con audio de Veo 3.1 Fast | No disponible | USD 0.10 (720p) | USD 0.12 (1080p) | USD 0.30 (4K)
+    Video de Veo 3.1 Lite con precio de audio (predeterminado) | No disponible | USD 0.05 (720p) | USD 0.08 (1080p) | (no se admite la salida en 4K)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Veo 3
+  Code: veo-3.0-generate-001
+  Descripcion: Nuestro modelo estable de generaci?n de videos, disponible para los desarrolladores en el nivel pagado de la API de Gemini.
+  STATUS: ** OBSOLETO / DEPRECADO **
+     | Nivel gratuito | Nivel de pago, por segundo en USD
+    Precio predeterminado de video est?ndar con audio de Veo 3 | No disponible | $0.40
+    Precio predeterminado de video con audio de Veo 3 Fast | No disponible | USD 0.10 (720p) | USD 0.12 (1080p) | USD 0.30 (4K)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Veo 2
+  Code: veo-2.0-generate-001
+  Descripcion: Nuestro modelo de generaci?n de videos de estado del arte, disponible para los desarrolladores en el nivel pagado de la API de Gemini.
+  STATUS: ** OBSOLETO / DEPRECADO **
+     | Nivel gratuito | Nivel de pago, por segundo en USD
+    Precio del video | No disponible | $0.35
+    Se usa para mejorar nuestros productos | S? | No
+
+### Lyria 3
+  Code: lyria-3-clip-preview
+  Descripcion: Familia de modelos de generaci?n de m?sica de Google. Los modelos de vista previa pueden cambiar antes de volverse estables y tener l?mites de frecuencia m?s restrictivos.
+     | Nivel gratuito | Nivel pagado, por solicitud en USD
+    Vista previa de clip de Lyria 3 (30 s) | No disponible | USD 0.04 por canci?n
+    Versi?n preliminar de Lyria 3 Pro (canci?n completa) | No disponible | USD 0.08 por canci?n
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemini Embedding 2
+  Code: gemini-embedding-2
+  Descripcion: Nuestro primer modelo de embedding multimodal, que asigna texto, im?genes, videos, audio y PDFs a un espacio de embedding unificado.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de la entrada de texto | Sin costo | $0.20
+    Precio de la entrada de imagen | Sin costo | USD 0.45 (USD 0.00012 por imagen)
+    Precio de entrada de audio | Sin costo | USD 6.50 (USD 0.00016 por segundo)
+    Precio de entrada de video | Sin costo | USD 12.00 (USD 0.00079 por fotograma)
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de la entrada de texto | No disponible | $0.10
+    Precio de la entrada de imagen | No disponible | USD 0.225 (USD 0.00006 por imagen)
+    Precio de entrada de audio | No disponible | USD 3.25 (USD 0.00008 por segundo)
+    Precio de entrada de video | No disponible | USD 6.00 (USD 0.000395 por fotograma)
+    Se usa para mejorar nuestros productos | S? | No
+
+### Embedding de Gemini
+  Code: gemini-embedding-001
+  Descripcion: Nuestro modelo de Gemini Embeddings para casos de uso de solo texto, disponible para los desarrolladores en los niveles gratuitos y pagados de la API de Gemini
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | $0.15
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | $0.075
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini Robotics-ER 1.6
+  Code: gemini-robotics-er-1.6-preview
+  Descripcion: Gemini Robotics-ER, abreviatura de Gemini Robotics-Embodied Reasoning, es un modelo de pensamiento que mejora las capacidades de los robots para comprender el mundo f?sico y relacionarse con ?l.
+  Plan: Est?ndar
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | USD 1.00 (texto, imagen o video) | USD 2.00 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | Sin costo | USD 5.00
+    Fundamentaci?n con la B?squeda de Google | No disponible | 5,000 instrucciones por mes (gratis, l?mite compartido con Flash), luego USD 14 por cada 1,000 b?squedas para la fundamentaci?n basada en texto y en im?genes.
+    Se usa para mejorar nuestros productos | S? | No
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 0.50 (texto, imagen o video) | USD 1.00 (audio)
+    Precio de salida (incluidos los tokens de pensamiento) | No disponible | $2.50
+    Fundamentaci?n con la B?squeda de Google | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+
+### Versi?n preliminar de Gemini 2.5 para uso en computadoras
+  Code: gemini-2.5-computer-use-preview-10-2025
+  Descripcion: Nuestro modelo de uso de la computadora est? optimizado para compilar agentes de control del navegador que automatizan tareas.
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | No disponible | USD 1.25, instrucciones &lt;= 200,000 tokens | USD 2.50, instrucciones > 200,000 tokens
+    Precio de salida | No disponible | USD 10.00, instrucciones &lt;= 200 000 tokens | USD 15.00, instrucciones > 200 000 tokens
+    Se usa para mejorar nuestros productos | S? | No
+
+### Gemma 4
+  Code: (no model code)
+  Descripcion: Nuestro modelo abierto, liviano y de vanguardia creado con la misma tecnolog?a que impulsa nuestros modelos de Gemini.
+     | Nivel gratuito | Nivel de pago, por cada 1 mill?n de tokens en USD
+    Precio de entrada | Sin costo | No disponible
+    Precio de salida | Sin costo | No disponible
+    Precio del almacenamiento de contexto en cach? | Sin costo | No disponible
+    Almacenamiento de contexto en cach? | Sin costo | No disponible
+    Precio de la adaptaci?n | No disponible | No disponible
+    Fundamentaci?n con la B?squeda de Google | No disponible | No disponible
+    Se usa para mejorar nuestros productos | S? | No
+
+### Notas
+  Code: DOCUMENT
+  Descripcion: Salvo que se indique lo contrario, el contenido de esta p?gina est? sujeto a la licencia Atribuci?n?4.0 de Creative?Commons, y los ejemplos de c?digo est?n sujetos a la licencia Apache?2.0. Para obtener m?s informaci?n, consulta las pol?ticas del sitio de Google?Developers. Java es una marca registr
+
+
+================================================================================
+=== LISTA COMPLETA DE MODELOS (IDs) ===
+================================================================================
+   1. gemini-3.5-flash
+   2. gemini-3.5-live-translate-preview
+   3. gemini-3.1-flash-lite
+   4. gemini-3.1-flash-live-preview
+   5. gemini-3.1-flash-image
+   6. gemini-3.1-flash-tts-preview
+   7. gemini-3-flash-preview
+   8. gemini-3-pro-image
+   9. gemini-2.5-pro
+  10. gemini-2.5-flash
+  11. gemini-2.5-flash-lite
+  12. gemini-2.5-flash-lite-preview-09-2025
+  13. gemini-2.5-flash-native-audio-preview-12-2025
+  14. gemini-2.5-flash-image
+  15. gemini-2.5-flash-preview-tts
+  16. gemini-2.5-pro-preview-tts
+  17. gemini-2.0-flash
+  18. gemini-2.0-flash-lite
+  19. veo-2.0-generate-001
+  20. gemini-embedding-2
+  21. gemini-embedding-001
+  22. gemini-robotics-er-1.6-preview
+  23. gemini-2.5-computer-use-preview-10-2025
+
+Total models with pricing: 23
+
+================================================================================
+=== MODELOS ADICIONALES (desde navegacion) ===
+================================================================================
+   1. gemini-3.1-flash-image
+   2. gemini-3.1-pro-preview
+   3. gemini-3-pro-preview
+   4. gemini-3-pro-image
+   5. gemini-3.5-flash
+   6. gemini-3.5-live-translate-preview
+   7. gemini-3-flash-preview
+   8. gemini-3.1-flash-tts-preview
+   9. veo-3.1-lite-generate-preview
+  10. gemini-3.1-flash-live-preview
+  11. gemini-3.1-flash-lite
+  12. gemini-3.1-flash-lite-preview
+  13. gemini-2.5-flash
+  14. gemini-2.5-flash-preview-09-2025
+  15. gemini-2.5-flash-image
+  16. gemini-2.5-flash-native-audio-preview-12-2025
+  17. gemini-2.5-flash-preview-tts
+  18. gemini-2.5-flash-lite
+  19. gemini-2.5-flash-lite-preview-09-2025
+  20. gemini-2.5-pro
+  21. gemini-2.5-pro-preview-tts
+  22. gemini-2.0-flash
+  23. gemini-2.0-flash-lite
+  24. imagen
+  25. veo-3.1-generate-preview
+  26. veo-2.0-generate-001
+  27. gemini-embedding-001
+  28. gemini-embedding-2
+  29. gemini-robotics-er-1.5-preview
+  30. gemini-robotics-er-1.6-preview
+  31. deep-research-pro-preview-12-2025
+  32. deep-research-preview-04-2026
+  33. deep-research-max-preview-04-2026
+  34. antigravity-preview-05-2026
+  35. lyria-realtime-exp
+  36. lyria-3-clip-preview
+  37. lyria-3-pro-preview
+
+Total additional models from nav: 37

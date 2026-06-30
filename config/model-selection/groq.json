@@ -2,8 +2,56 @@
   "provider": "groq",
   "models": [
     {
-      "match": "llama-3.3-70b-versatile",
+      "match": "qwen/qwen3.6-27b",
       "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "qwen",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "timeout_seconds": 60
+      }
+    },
+    {
+      "match": "openai/gpt-oss-120b",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "openai",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 90
+      }
+    },
+    {
+      "match": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "priority": 3,
+      "enabled": true,
+      "execution": {
+        "context_length": 10000000,
+        "max_output_tokens": 16384,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "meta",
+        "temperature": 0.3,
+        "top_p": 0.9,
+        "max_tokens": 4096,
+        "timeout_seconds": 45
+      }
+    },
+    {
+      "match": "llama-3.3-70b-versatile",
+      "priority": 4,
       "enabled": true,
       "execution": {
         "context_length": 131072,
@@ -19,7 +67,7 @@
     },
     {
       "match": "qwen/qwen3-32b",
-      "priority": 2,
+      "priority": 5,
       "enabled": true,
       "execution": {
         "context_length": 131072,
@@ -34,40 +82,8 @@
       }
     },
     {
-      "match": "meta-llama/llama-4-scout-17b-16e-instruct",
-      "priority": 3,
-      "enabled": true,
-      "execution": {
-        "context_length": 10000000,
-        "max_output_tokens": 16384,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "meta",
-        "temperature": 0.3,
-        "top_p": 0.9,
-        "max_tokens": 4096,
-        "timeout_seconds": 45
-      }
-    },
-    {
-      "match": "openai/gpt-oss-120b",
-      "priority": 4,
-      "enabled": true,
-      "execution": {
-        "context_length": 131072,
-        "max_output_tokens": 65536,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "openai",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 8192,
-        "timeout_seconds": 90
-      }
-    },
-    {
       "match": "openai/gpt-oss-20b",
-      "priority": 5,
+      "priority": 6,
       "enabled": true,
       "execution": {
         "context_length": 131072,
@@ -83,8 +99,8 @@
     },
     {
       "match": "groq/compound",
-      "priority": 6,
-      "enabled": false,
+      "priority": 7,
+      "enabled": true,
       "execution": {
         "context_length": 131072,
         "max_output_tokens": 8192,

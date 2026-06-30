@@ -1,0 +1,108 @@
+## PR Review: feat: Add Responses API compatibility layer and model metadata
+
+Thanks for this PR — the Responses API compatibility layer is a well-thought-out addition that fills a real gap for Codex CLI users. The translation architecture is clean and the SSE streaming implementation looks solid. I have a few concerns that should be addressed before merging:
+
+
+### 🔴 Must-fix
+
+1. Restore explicit HttpVersion / HttpVersionPolicy in OpenAiEndpoints.cs
+
+    -            {
+    -                Content = reqContent,
+    -                Version = HttpVersion.Version11,
+    -                VersionPolicy = HttpVersionPolicy.RequestVersionExact
+    -            };
+    +            {
+    +                Content = reqContent
+    +            };
+
+    This forces HTTP/1.1 explicitly for upstream chat completion requests. Without it,
+    HttpClient may negotiate HTTP/2, which has been known to cause issues with some
+    provider APIs. Was this removal intentional? If not, please restore it. If yes,
+    please document the rationale — this is a compatibility-sensitive change.
+
+2. Stub endpoints must be clearly documented as stubs
+
+    Several /v1/responses/* sub-endpoints return hardcoded/hollow responses:
+
+    | Endpoint                                    | Behavior                        | Risk                                          |
+    |---------------------------------------------|---------------------------------|-----------------------------------------------|
+    | GET /v1/responses/{id}                      | Always "status": "completed"   | Client may think a failed response succeeded   |
+    | POST /v1/responses/{id}/cancel              | Always "status": "cancelled"   | No actual cancellation happens                 |
+    | POST /v1/responses/{id}/input_tokens        | Always input_tokens: 0         | Misleading token counts                        |
+    | GET /v1/responses/{id}/input_items          | Always empty array             | Client may lose conversation context           |
+
+    At minimum, add an XML doc comment on each stub endpoint explaining it is not
+    fully implemented. Better yet, return a 501 Not Implemented or a response with
+    a "warning": "stub" field so clients don't silently rely on incorrect data.
+
+3. Missing unit tests for ResponsesEndpoints.cs
+
+    885 lines of new endpoint logic with zero tests. Given this is a format-translation
+    layer, round-trip tests would be high-value and easy to write:
+
+    - ConvertResponsesToChatCompletions — verify correct field mapping
+    - ConvertChatCompletionsToResponses — verify response shape
+    - Round-trip: request -> chat format -> response format -> verify consistency
+    - SSE event parsing for tool calls, reasoning content, and text deltas
+
+
+### 🟡 Should-fix
+
+4. POST /v1/responses/{responseId}/input_tokens ignores responseId
+
+    The endpoint reads the request body but never uses responseId for anything
+    meaningful. If token counting is a stub, at least log a warning or return a
+    structured response indicating it's a placeholder.
+
+5. Bump the proxy version string in Program.cs
+
+    The banner still prints "2026.06.02". A feature of this size warrants a
+    version bump.
+
+6. Hardcoded temperature: 1 and top_p: 1 in BuildResponseObject
+
+    These don't reflect the actual values used in the upstream request. Consider
+    extracting them from the original Responses API request or omitting them when
+    unknown.
+
+7. Hardcoded parallel_tool_calls: true
+
+    DeepSeek may not actually support parallel tool calls. Consider making this
+    configurable or deriving it from the model profile.
+
+8. Verify the max_tokens increase for deepseek-coder-6.7b-instruct
+
+    The jump from 4096 to 131072 is a 32x increase. The model is enabled: false,
+    so it's not critical, but if someone enables it the timeout may be insufficient
+    for that token budget (90s timeout for up to 131K tokens).
+
+
+### 🟢 Nice-to-have
+
+9. Remove trailing whitespace changes in test files
+
+    ProviderRegistryTests.cs has whitespace-only diffs (trailing spaces removed).
+    These are harmless but pollute the diff — consider extracting into a separate
+    cleanup commit.
+
+10. GET /v1/models/{modelId} model resolution
+
+    The new endpoint uses providerRegistry.ResolveModel(modelId), which is
+    consistent with how chat completions resolves models. Good.
+
+
+### Summary
+
+| Area                            | Verdict                                |
+|---------------------------------|----------------------------------------|
+| Architecture & design           | Solid                                  |
+| SSE streaming implementation    | Well done                              |
+| Request/response translation    | Good coverage                          |
+| Test coverage                   | Needs tests for new code               |
+| Stub endpoint transparency      | Needs documentation                    |
+| HttpVersion regression risk     | Needs justification or revert          |
+
+Overall this is a great addition — just needs tests, documentation for the stubs,
+and clarification on the HttpVersion change. Happy to re-review once those are
+addressed.

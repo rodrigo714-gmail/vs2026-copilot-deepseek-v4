@@ -12,7 +12,6 @@ namespace ProxyTests;
 ///      hinted provider whose suffix equals the bare name
 ///      (e.g. "nvidia/qwen3.5-397b-a17b" → "qwen/qwen3.5-397b-a17b", the actual upstream id).
 /// </summary>
-[Collection("Proxy")]
 public class ProviderModelHintTests
 {
     // ── Level 1: verbatim match ───────────────────────────────────────────
@@ -178,8 +177,11 @@ public class ProviderModelHintTests
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
             registry.ResolveCandidates("openai/gpt-oss-120b@ollama");
 
-        // The hint is for ollama, but ollama doesn't claim this id, so fallback to default.
+        // The hint is for ollama, but ollama doesn't claim this id. The model resolves
+        // to the default "deepseek-v4-pro" (which may be registered if ProxyFixture ran
+        // first) but the caller will see a single candidate for the first registered provider.
         Assert.Single(cands);
+        Assert.Equal("deepseek", cands[0].Provider.Name);
     }
 
     [Fact]

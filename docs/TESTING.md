@@ -27,8 +27,8 @@ The proxy includes a comprehensive test suite covering every component of the ro
 
 ### Test Statistics
 
-- **Total Tests:** 421
-- **Status:** ✅ All passing (421/421)
+- **Total Tests:** 336
+- **Status:** ✅ All passing (336/336)
 - **Framework:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing`
 - **Coverage Areas:**
   - ✅ Endpoint routing (OpenAI `/v1/*` & Ollama `/api/*` formats)
@@ -175,8 +175,8 @@ Validates that `RequestTransformer.ApplyExecutionDefaults()` correctly injects d
 **Cerebras Models (2):**
 - ✅ zai-glm-4.7, gpt-oss-120b
 
-**Ollama Cloud Models (5 enabled):**
-- ✅ qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro
+**Ollama Cloud Models (9 enabled):**
+- ✅ kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, glm-5.1, deepseek-v4-flash, nemotron-3-ultra
 
 #### Expected Behavior
 
@@ -216,7 +216,7 @@ The proxy ships with the following test files in `tests/ProxyTests/`:
 | `ProviderHttpClientFactoryTests.cs` | ~8 | Per-provider `HttpClient` config (auth headers, base URL, fallbacks) |
 | `ProxyAuthenticationMiddlewareTests.cs` | ~8 | `PROXY_API_KEY` bearer-token middleware |
 | `JsonDefaultsTests.cs` | ~9 | `System.Text.Json` snake_case + null handling |
-| **Total** | **329** | |
+| **Total** | **336** | |
 
 ---
 

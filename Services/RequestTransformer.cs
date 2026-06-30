@@ -55,6 +55,7 @@ internal sealed class RequestTransformer
             bool hasTemperature = false;
             bool hasTopP = false;
             bool hasMaxTokens = false;
+            bool hasMaxCompletionTokens = false;
             bool hasReasoningEffort = false;
 
             foreach (JsonProperty prop in root.EnumerateObject())
@@ -85,6 +86,11 @@ internal sealed class RequestTransformer
                 }
                 else if (prop.NameEquals("max_tokens"))
                 {
+                    // If max_completion_tokens is already present (was handled earlier),
+                    // skip max_tokens to avoid the "both set" error from Cerebras/Google.
+                    if (hasMaxCompletionTokens)
+                        continue;
+
                     if (force && exec.MaxTokensPreferred.HasValue)
                     {
                         writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
@@ -94,6 +100,18 @@ internal sealed class RequestTransformer
                         prop.WriteTo(writer);
                     }
                     hasMaxTokens = true;
+                }
+                else if (prop.NameEquals("max_completion_tokens"))
+                {
+                    if (force && exec.MaxTokensPreferred.HasValue)
+                    {
+                        writer.WriteNumber("max_completion_tokens", exec.MaxTokensPreferred.Value);
+                    }
+                    else
+                    {
+                        prop.WriteTo(writer);
+                    }
+                    hasMaxCompletionTokens = true;
                 }
                 else if (prop.NameEquals("reasoning_effort"))
                 {
@@ -123,8 +141,15 @@ internal sealed class RequestTransformer
             // Skip top_p injection for native reasoners to avoid temperature+top_p conflict.
             if (!hasTopP && exec.TopP.HasValue && !isNativeReasoner)
                 writer.WriteNumber("top_p", exec.TopP.Value);
-            if (!hasMaxTokens && exec.MaxTokensPreferred.HasValue)
-                writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
+            // Only inject max_tokens if neither max_tokens nor max_completion_tokens is present.
+            // Prefer max_completion_tokens when the client already used it (VS 2026 BYOM).
+            if (!hasMaxTokens && !hasMaxCompletionTokens && exec.MaxTokensPreferred.HasValue)
+            {
+                if (hasMaxCompletionTokens)
+                    writer.WriteNumber("max_completion_tokens", exec.MaxTokensPreferred.Value);
+                else
+                    writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
+            }
             // Only inject reasoning_effort for providers/models that natively support it.
             if (!hasReasoningEffort && !string.IsNullOrWhiteSpace(exec.ReasoningEffort) && supportsReasoningEffort)
                 writer.WriteString("reasoning_effort", exec.ReasoningEffort);

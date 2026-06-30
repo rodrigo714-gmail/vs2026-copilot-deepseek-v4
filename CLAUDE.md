@@ -45,7 +45,7 @@ A high-performance ASP.NET Core **minimal API proxy** that bridges GitHub Copilo
 | OpenAI-compatible | `/v1/*` | Copilot, Cursor, Continue.dev, OpenAI SDKs |
 | Ollama-compatible | `/api/*` | VS 2026 BYOM, native Ollama clients |
 
-**Supported providers (8):** DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras.
+**Supported providers (9):** DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux.
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated model configs are optimised for this workload.
 
@@ -89,7 +89,7 @@ ProviderBenchmarkService   →  Background HostedService monitoring provider hea
 
 ### Model Configuration
 
-Model metadata lives in `config/model-selection/{provider}.json` (8 files: `deepseek`, `openai`, `nvidia`, `groq`, `openrouter`, `moonshot`, `cerebras`, `ollamacloud`). Each file maps model names to execution defaults:
+Model metadata lives in `config/model-selection/{provider}.json` (9 files: `deepseek`, `openai`, `nvidia`, `groq`, `openrouter`, `moonshot`, `cerebras`, `ollamacloud`, `zenmux`). Each file maps model names to execution defaults:
 
 ```json
 {
@@ -119,7 +119,7 @@ Model metadata lives in `config/model-selection/{provider}.json` (8 files: `deep
 
 ### Curated model cap
 
-Each provider exposes **5 enabled models maximum** (DeepSeek and Cerebras expose 2, Ollama Cloud exposes 5). Curated picks prioritise coding strength for GitHub Copilot in Visual Studio 2026:
+Each provider exposes **up to 9 enabled models** (DeepSeek and Cerebras expose 2, Ollama Cloud exposes 9). Curated picks prioritise coding strength for GitHub Copilot in Visual Studio 2026:
 
 | Provider | Top picks |
 |----------|-----------|
@@ -130,7 +130,8 @@ Each provider exposes **5 enabled models maximum** (DeepSeek and Cerebras expose
 | OpenRouter | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro, qwen3.7-plus |
 | Moonshot | kimi-k2.6, kimi-k2.5, moonshot-v1-{128k,auto,32k} |
 | Cerebras | zai-glm-4.7, gpt-oss-120b |
-| Ollama Cloud | qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro |
+| Ollama Cloud | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5 |
+| ZenMux | glm-5.2-free 🆓, glm-5.2, kimi-k2.7-code-free 🆓, kimi-k2.7-code, qwen3.7-plus, qwen3.7-max, gemini-3.5-flash, gpt-5.5-pro, gpt-5.5, qwen3.6-plus, deepseek-v4-pro, deepseek-v4-flash, grok-4.3 |
 
 ### 3-level `provider/model` hint resolution
 
@@ -172,7 +173,7 @@ Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** 
 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
 - Tests that mutate process env vars MUST share the `[Collection("Proxy")]` fixture (no parallel races)
-- **329 tests** across 14 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, **override_client_params semantics**, and **3-level `provider/model` hint resolution**
+- **336 tests** across 14 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, **override_client_params semantics**, and **3-level `provider/model` hint resolution**
 
 ## Credential Separation
 
@@ -194,6 +195,6 @@ Per `.github/copilot-instructions.md`: **Never confuse Ollama Cloud API keys wit
 | `Models/ModelExecutionConfig.cs` | record struct with `OverrideClientParams` field |
 | `Models/ProviderInfo.cs` | record struct `(Name, ApiKey, BaseUrl, Client)` |
 | `Infrastructure/ProxyAuthenticationMiddleware.cs` | Optional bearer token auth |
-| `config/model-selection/` | Per-provider model JSON configs (8 files) |
+| `config/model-selection/` | Per-provider model JSON configs (9 files) |
 
 Further detail is available in `docs/ARCHITECTURE.md`, `docs/AGENTS.md`, `docs/API.md`, `docs/CONFIGURATION.md`, `docs/TESTING.md`, and `docs/DEPLOYMENT.md`.

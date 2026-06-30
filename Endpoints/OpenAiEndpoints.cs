@@ -1,6 +1,8 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 internal static class OpenAiEndpoints
 {
@@ -8,19 +10,11 @@ internal static class OpenAiEndpoints
     {
         app.MapGet("/v1/models", (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore) =>
         {
-            // Build a complete list from static config files (always available) plus
-            // any models discovered from provider catalogs. The id format MUST match
-            // what ProviderRegistry.ResolveModel / ResolveCandidates can actually
-            // route: bare "model" and qualified "model@provider" (the internal
-            // mapping built by ModelCatalogService). Listing "provider/model" would
-            // not be routable on POST /v1/chat/completions.
             _ = modelCatalog.RefreshAvailableModelsIfNeeded(ctx.RequestAborted);
 
             List<(string Provider, string Model)> allModels = [];
             HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-            // 1) Enumerate everything already in the live catalog (covers both bare
-            //    and qualified aliases that the routing layer actually accepts).
             foreach (string modelId in modelCatalog.AvailableModels)
             {
                 if (string.IsNullOrWhiteSpace(modelId))
@@ -49,8 +43,6 @@ internal static class OpenAiEndpoints
                 {
                     allModels.Add((providerName, modelId));
                 }
-                // Also surface the bare form when the catalog only registered the
-                // qualified one (helps clients that prefer short ids).
                 if (modelId.Contains('@'))
                 {
                     string bare = modelId[..modelId.IndexOf('@')];
@@ -59,11 +51,9 @@ internal static class OpenAiEndpoints
                         allModels.Add((providerName, bare));
                     }
                 }
-                _ = displayModel; // currently unused beyond the assignments above
+                _ = displayModel;
             }
 
-            // 2) Add any model known by its upstream id but not present yet
-            //    (defensive: catalogs populated outside the discoverer).
             foreach (KeyValuePair<string, ProviderInfo> kv in providerRegistry.ModelToProvider)
             {
                 if (seen.Add(kv.Key))
@@ -72,7 +62,6 @@ internal static class OpenAiEndpoints
                 }
             }
 
-            // Sort by provider name then model name for stable output.
             allModels = allModels.OrderBy(m => m.Provider, StringComparer.OrdinalIgnoreCase)
                                  .ThenBy(m => m.Model, StringComparer.OrdinalIgnoreCase)
                                  .ToList();
@@ -127,7 +116,8 @@ internal static class OpenAiEndpoints
             RequestTransformer requestTransformer,
             ModelCatalogService modelCatalog,
             ChatStreamingService chatStreaming,
-            ReasoningCacheService reasoningCache) =>
+            ReasoningCacheService reasoningCache,
+            UsageTrackerService usageTracker) =>
         {
             CancellationToken ct = ctx.RequestAborted;
 
@@ -140,10 +130,23 @@ internal static class OpenAiEndpoints
 
             string reqModel = root.TryGetProperty("model", out JsonElement rm) && rm.ValueKind == JsonValueKind.String
                 ? rm.GetString()! : providerRegistry.DefaultModel;
+
+            Console.WriteLine($"[OPENAI-ROUTE] Received model='{reqModel}' stream={isStream}");
+
+            // Validate model exists — no silent fallback to default provider
+            if (!providerRegistry.IsModelKnown(reqModel))
+            {
+                Console.WriteLine($"[OPENAI-ROUTE] Model rejected by IsModelKnown: '{reqModel}' (len={reqModel.Length}, hex={string.Join(" ", reqModel.Select(c => ((int)c).ToString("x2")))})");
+                ctx.Response.StatusCode = 400;
+                ctx.Response.ContentType = "application/json";
+                var modelList = providerRegistry.ModelToProvider.Keys.OrderBy(k => k).Take(30);
+                await ctx.Response.WriteAsync($"{{\"error\":\"Model '{System.Text.Json.JsonEncodedText.Encode(reqModel)}' is not mapped to any provider. Available models: {string.Join(", ", modelList)}\",\"code\":\"MODEL_NOT_FOUND\"}}", ct);
+                return;
+            }
+
             string effectiveModel = providerRegistry.ResolveModel(reqModel);
-            // Honour an explicit OpenAI-style "provider/model" hint so the request goes
-            // to the requested provider even when the bare model id is owned by a
-            // different one in the catalog.
+            Console.WriteLine($"[OPENAI-ROUTE] Resolved model='{effectiveModel}'");
+
             ProviderInfo? requestedProvider = ExtractProviderHint(reqModel, providerRegistry);
             IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> candidates;
             if (requestedProvider is { } pinnedHint)
@@ -154,6 +157,24 @@ internal static class OpenAiEndpoints
             else
             {
                 candidates = providerRegistry.ResolveCandidates(effectiveModel);
+            }
+
+            if (candidates.Count > 0)
+            {
+                Console.WriteLine($"[OPENAI-ROUTE] Candidate[0] Provider='{candidates[0].Provider.Name}' Upstream='{candidates[0].UpstreamModel}' BaseUrl='{candidates[0].Provider.Client.BaseAddress}' ChatPath='{candidates[0].Provider.Capabilities.ChatPath}'");
+            }
+            else
+            {
+                Console.WriteLine($"[OPENAI-ROUTE] No candidates resolved for effectiveModel='{effectiveModel}'");
+            }
+
+            ctx.Response.Headers["X-Proxy-Requested-Model"] = reqModel;
+            ctx.Response.Headers["X-Proxy-Resolved-Model"] = effectiveModel;
+            ctx.Response.Headers["X-Proxy-Candidate-Count"] = candidates.Count.ToString();
+            if (candidates.Count > 0)
+            {
+                ctx.Response.Headers["X-Proxy-Primary-Provider"] = candidates[0].Provider.Name;
+                ctx.Response.Headers["X-Proxy-Primary-Upstream"] = candidates[0].UpstreamModel;
             }
 
             string? modifiedRequest = requestTransformer.ModifyRequest(doc);
@@ -172,9 +193,6 @@ internal static class OpenAiEndpoints
                         (ProviderInfo candidateProvider, string candidateUpstream) = candidates[i];
 
                         string candidateBody = modifiedRequest ?? rawBody;
-                        // Always replace the model in the body with the upstream model.
-                        // The raw body may carry a BYOM tag suffix (e.g. ":latest") that
-                        // upstream providers don't understand.
                         candidateBody = requestTransformer.ReplaceModelInRequestBody(candidateBody, candidateUpstream);
                         candidateBody = requestTransformer.ApplyExecutionDefaults(candidateBody, effectiveModel, candidateProvider.Capabilities);
 
@@ -188,9 +206,11 @@ internal static class OpenAiEndpoints
                         }
 
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
                         HttpResponseMessage response = await candidateProvider.Client.SendAsync(
                             new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
                             requestCt);
+                        sw.Stop();
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
 
@@ -200,17 +220,29 @@ internal static class OpenAiEndpoints
                             ctx.Response.StatusCode = (int)response.StatusCode;
                             ctx.Response.ContentType = "application/json";
                             await ctx.Response.WriteAsync(respBody, ct);
+
+                            RecordUsageFromResponse(usageTracker, candidateProvider.Name, respBody, response.Headers, response.TrailingHeaders, sw.ElapsedMilliseconds, effectiveModel);
                             response.Dispose();
                             return;
                         }
 
+                        Console.WriteLine($"[OPENAI-ERROR] Provider='{candidateProvider.Name}' Upstream='{candidateUpstream}' HTTP={(int)response.StatusCode} RespBody='{respBody[..Math.Min(respBody.Length, 500)]}' Latency={sw.ElapsedMilliseconds}ms");
+
+                        usageTracker.RecordError(candidateProvider.Name,
+                            $"HTTP {(int)response.StatusCode}",
+                            ((int)response.StatusCode).ToString(), sw.ElapsedMilliseconds);
+
                         lastResponse?.Dispose();
                         lastResponse = response;
                         lastBody = respBody;
-                        // Try next provider candidate (failover by configured priority).
                     }
 
-                    // All candidates failed: surface the last upstream error.
+                    if (lastResponse is not null && candidates.Count > 0)
+                    {
+                        usageTracker.RecordError(candidates[^1].Provider.Name,
+                            lastBody is not null ? "All candidates failed" : "no provider candidate available",
+                            lastResponse is not null ? ((int)lastResponse.StatusCode).ToString() : "502");
+                    }
                     ctx.Response.StatusCode = lastResponse is not null ? (int)lastResponse.StatusCode : StatusCodes.Status502BadGateway;
                     ctx.Response.ContentType = "application/json";
                     await ctx.Response.WriteAsync(lastBody ?? "{\"error\":\"no provider candidate available\"}", ct);
@@ -222,13 +254,10 @@ internal static class OpenAiEndpoints
                 return;
             }
 
-            // Streaming: use the first candidate only (cannot fail over once bytes are emitted).
+            // Streaming
             (ProviderInfo provider, string upstreamModel) = candidates[0];
 
             string bodyText = modifiedRequest ?? rawBody;
-            // Always replace the model in the body with the upstream model.
-            // The raw body may carry a BYOM tag suffix (e.g. ":latest") that
-            // upstream providers don't understand.
             bodyText = requestTransformer.ReplaceModelInRequestBody(bodyText, upstreamModel);
             bodyText = requestTransformer.ApplyExecutionDefaults(bodyText, effectiveModel, provider.Capabilities);
 
@@ -246,33 +275,43 @@ internal static class OpenAiEndpoints
             using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
             using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath)
             {
-                Content = reqContent
+                Content = reqContent,
+                Version = HttpVersion.Version11,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
             upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
+            var streamSw = System.Diagnostics.Stopwatch.StartNew();
             using HttpResponseMessage upstreamResp = await provider.Client.SendAsync(
                 upstreamReq, HttpCompletionOption.ResponseHeadersRead, requestCt);
+            streamSw.Stop();
 
             if (!upstreamResp.IsSuccessStatusCode)
             {
                 string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
+                Console.WriteLine($"[OPENAI-ERROR-STREAM] Provider='{provider.Name}' Upstream='{upstreamModel}' HTTP={(int)upstreamResp.StatusCode} RespBody='{(!string.IsNullOrEmpty(errBody) ? errBody[..Math.Min(errBody.Length, 500)] : "(empty)")}' Latency={streamSw.ElapsedMilliseconds}ms");
                 ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
                 ctx.Response.ContentType = "application/json";
                 await ctx.Response.WriteAsync(errBody, ct);
+
+                usageTracker.RecordError(provider.Name, $"HTTP {(int)upstreamResp.StatusCode}", ((int)upstreamResp.StatusCode).ToString(), streamSw.ElapsedMilliseconds);
                 return;
             }
 
+            double streamCost = PricingCalculator.CalculateCost(effectiveModel, provider.Name, 0, 0);
+            usageTracker.RecordRequest(provider.Name, 0, 0, 0, null, streamSw.ElapsedMilliseconds, streamCost);
+            var rlHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var h in upstreamResp.Headers)
+                rlHeaders[h.Key] = string.Join(", ", h.Value);
+            foreach (var h in upstreamResp.TrailingHeaders)
+                rlHeaders[h.Key] = string.Join(", ", h.Value);
+            usageTracker.RecordRateLimitHeaders(provider.Name, rlHeaders);
             await chatStreaming.StreamAndCache(upstreamResp, ctx.Response, ct);
         });
 
         return app;
     }
 
-    /// <summary>
-    /// Resolves an explicit "provider/model" hint from the request id to a
-    /// <see cref="ProviderInfo"/>. Returns null when the hint is absent, ambiguous,
-    /// or points at a provider the registry does not know about.
-    /// </summary>
     private static ProviderInfo? ExtractProviderHint(string? requestedModel, ProviderRegistry providerRegistry)
     {
         if (string.IsNullOrWhiteSpace(requestedModel))
@@ -292,10 +331,6 @@ internal static class OpenAiEndpoints
         return null;
     }
 
-    /// <summary>
-    /// Attempts an Ollama Cloud chat completion as part of failover.
-    /// Returns true if the response was written to the client; false if the candidate failed and the caller should try the next one.
-    /// </summary>
     private static async Task<bool> TryHandleOllamaCloudChatCompletion(
         HttpContext ctx,
         ProviderInfo provider,
@@ -333,81 +368,151 @@ internal static class OpenAiEndpoints
         CancellationToken requestCt,
         CancellationToken clientCt)
     {
-        string ollamaRequestBody = BuildOllamaChatRequest(openAiRequestBody, upstreamModel, isStream: false);
-
-        using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
-        using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content },
-            requestCt);
-
-        string respBody = await response.Content.ReadAsStringAsync(clientCt);
-        if (!response.IsSuccessStatusCode)
-        {
-            ctx.Response.StatusCode = (int)response.StatusCode;
-            ctx.Response.ContentType = "application/json";
-            await ctx.Response.WriteAsync(respBody, clientCt);
-            return;
-        }
-
-        string openAiResponseBody = ConvertOllamaChatToOpenAiCompletion(respBody, effectiveModel);
-
-        using JsonDocument completionDoc = JsonDocument.Parse(openAiResponseBody);
-        JsonElement msg = completionDoc.RootElement.GetProperty("choices")[0].GetProperty("message");
-        string contentText = msg.TryGetProperty("content", out JsonElement ce) && ce.ValueKind == JsonValueKind.String
-            ? ce.GetString() ?? string.Empty
-            : string.Empty;
-
+        // Non-streaming: get full response and return as JSON
         if (!isStream)
         {
+            string ollamaRequestBody = BuildOllamaChatRequest(openAiRequestBody, upstreamModel, isStream: false);
+
+            using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await provider.Client.SendAsync(
+                new HttpRequestMessage(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content },
+                requestCt);
+
+            string respBody = await response.Content.ReadAsStringAsync(clientCt);
+            if (!response.IsSuccessStatusCode)
+            {
+                ctx.Response.StatusCode = (int)response.StatusCode;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(respBody, clientCt);
+                return;
+            }
+
+            string openAiResponseBody = ConvertOllamaChatToOpenAiCompletion(respBody, effectiveModel);
             ctx.Response.StatusCode = 200;
             ctx.Response.ContentType = "application/json";
             await ctx.Response.WriteAsync(openAiResponseBody, clientCt);
             return;
         }
 
-        // Streaming: Ollama Cloud non-streaming -> SSE chunks
-        object firstChunk = new
-        {
-            id = $"chatcmpl-{Guid.NewGuid():N}",
-            @object = "chat.completion.chunk",
-            created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            model = effectiveModel,
-            choices = new[]
-            {
-                new
-                {
-                    index = 0,
-                    delta = new { role = "assistant", content = contentText },
-                    finish_reason = (string?)null
-                }
-            }
-        };
-
-        object finishChunk = new
-        {
-            id = $"chatcmpl-{Guid.NewGuid():N}",
-            @object = "chat.completion.chunk",
-            created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            model = effectiveModel,
-            choices = new[]
-            {
-                new
-                {
-                    index = 0,
-                    delta = new { },
-                    finish_reason = "stop"
-                }
-            }
-        };
+        // Streaming: request NDJSON stream from Ollama Cloud and convert to SSE in real-time
+        string streamRequestBody = BuildOllamaChatRequest(openAiRequestBody, upstreamModel, isStream: true);
 
         ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = "text/event-stream";
         ctx.Response.Headers.CacheControl = "no-cache";
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
+        // Ensure response is streamed, not buffered
+        ctx.Response.Body.FlushAsync(clientCt).GetAwaiter().GetResult();
+        // Disable all response buffering in Kestrel
+        var responseBodyFeature = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
+        responseBodyFeature?.DisableBuffering();
 
-        await ctx.Response.WriteAsync($"data: {JsonSerializer.Serialize(firstChunk, JsonDefaults.SnakeCase)}\n\n", clientCt);
-        await ctx.Response.WriteAsync($"data: {JsonSerializer.Serialize(finishChunk, JsonDefaults.SnakeCase)}\n\n", clientCt);
+        string chatcmplId = $"chatcmpl-{Guid.NewGuid():N}";
+        long created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        using StringContent streamContent = new(streamRequestBody, Encoding.UTF8, "application/json");
+        using HttpRequestMessage streamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = streamContent };
+        using HttpResponseMessage streamResp = await provider.Client.SendAsync(
+            streamReq, HttpCompletionOption.ResponseHeadersRead, requestCt);
+
+        if (!streamResp.IsSuccessStatusCode)
+        {
+            string errBody = await streamResp.Content.ReadAsStringAsync(clientCt);
+            ctx.Response.StatusCode = (int)streamResp.StatusCode;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsync(errBody, clientCt);
+            return;
+        }
+
+        // Read NDJSON stream line-by-line from Ollama Cloud and convert each chunk to OpenAI SSE format
+        using Stream respStream = await streamResp.Content.ReadAsStreamAsync(clientCt);
+        using StreamReader ndjsonReader = new(respStream);
+        string? line;
+        while ((line = await ndjsonReader.ReadLineAsync(clientCt)) is not null)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            try
+            {
+                using JsonDocument chunk = JsonDocument.Parse(line);
+                JsonElement root = chunk.RootElement;
+
+                // Extract content from Ollama message chunk.
+                // Reasoning models (e.g. minimax-m3, kimi-k2.7-code) emit their thinking in
+                // "message.thinking" first while leaving "message.content" empty. Fall back to
+                // thinking when content is empty so VS 2026 BYOM sees a continuous stream.
+                string? deltaContent = null;
+                if (root.TryGetProperty("message", out JsonElement msg))
+                {
+                    bool hasContent = msg.TryGetProperty("content", out JsonElement contentEl) &&
+                                      contentEl.ValueKind == JsonValueKind.String &&
+                                      !string.IsNullOrWhiteSpace(contentEl.GetString());
+                    if (hasContent)
+                    {
+                        deltaContent = contentEl.GetString();
+                    }
+                    else if (msg.TryGetProperty("thinking", out JsonElement thinkingEl) &&
+                             thinkingEl.ValueKind == JsonValueKind.String)
+                    {
+                        deltaContent = thinkingEl.GetString();
+                    }
+                }
+
+                bool isDone = root.TryGetProperty("done", out JsonElement doneEl) && doneEl.GetBoolean();
+
+                // Skip chunks with empty/null content — VS 2026 BYOM doesn't handle them well
+                if (!string.IsNullOrWhiteSpace(deltaContent))
+                {
+                    object sseChunk = new
+                    {
+                        id = chatcmplId,
+                        @object = "chat.completion.chunk",
+                        created,
+                        model = effectiveModel,
+                        choices = new[]
+                        {
+                            new
+                            {
+                                index = 0,
+                                delta = new { role = "assistant", content = deltaContent },
+                                finish_reason = (string?)null
+                            }
+                        }
+                    };
+                    await ctx.Response.WriteAsync($"data: {JsonSerializer.Serialize(sseChunk, JsonDefaults.SnakeCase)}\n\n", clientCt);
+                    await ctx.Response.Body.FlushAsync(clientCt);
+                }
+
+                if (isDone)
+                {
+                    object finishChunk = new
+                    {
+                        id = chatcmplId,
+                        @object = "chat.completion.chunk",
+                        created,
+                        model = effectiveModel,
+                        choices = new[]
+                        {
+                            new
+                            {
+                                index = 0,
+                                delta = new { },
+                                finish_reason = "stop"
+                            }
+                        }
+                    };
+                    await ctx.Response.WriteAsync($"data: {JsonSerializer.Serialize(finishChunk, JsonDefaults.SnakeCase)}\n\n", clientCt);
+                    await ctx.Response.WriteAsync("data: [DONE]\n\n", clientCt);
+                    await ctx.Response.Body.FlushAsync(clientCt);
+                    return;
+                }
+            }
+            catch { }
+        }
+
+        // If we exit the loop without a done signal, send finish anyway
         await ctx.Response.WriteAsync("data: [DONE]\n\n", clientCt);
+        await ctx.Response.Body.FlushAsync(clientCt);
     }
 
     private static string BuildOllamaChatRequest(string openAiRequestBody, string model, bool isStream)
@@ -425,7 +530,68 @@ internal static class OpenAiEndpoints
         if (root.TryGetProperty("messages", out JsonElement messages))
         {
             writer.WritePropertyName("messages");
-            messages.WriteTo(writer);
+            writer.WriteStartArray();
+
+            foreach (JsonElement msg in messages.EnumerateArray())
+            {
+                writer.WriteStartObject();
+
+                bool hasMultiPartContent = false;
+                List<string> imageUrls = [];
+
+                if (msg.TryGetProperty("content", out JsonElement content) && content.ValueKind == JsonValueKind.Array)
+                {
+                    hasMultiPartContent = true;
+                    StringBuilder textContent = new();
+
+                    foreach (JsonElement part in content.EnumerateArray())
+                    {
+                        if (part.TryGetProperty("type", out JsonElement type) && type.GetString() == "text")
+                        {
+                            if (part.TryGetProperty("text", out JsonElement text) && text.ValueKind == JsonValueKind.String)
+                            {
+                                if (textContent.Length > 0)
+                                    textContent.Append('\n');
+                                textContent.Append(text.GetString());
+                            }
+                        }
+                        else if (type.GetString() == "image_url")
+                        {
+                            if (part.TryGetProperty("image_url", out JsonElement imgUrl) && imgUrl.ValueKind == JsonValueKind.Object)
+                            {
+                                if (imgUrl.TryGetProperty("url", out JsonElement url) && url.ValueKind == JsonValueKind.String)
+                                {
+                                    imageUrls.Add(url.GetString()!);
+                                }
+                            }
+                        }
+                    }
+
+                    writer.WriteString("content", textContent.ToString());
+                }
+
+                foreach (JsonProperty mp in msg.EnumerateObject())
+                {
+                    if (mp.NameEquals("content") && hasMultiPartContent)
+                        continue;
+                    mp.WriteTo(writer);
+                }
+
+                if (imageUrls.Count > 0)
+                {
+                    writer.WritePropertyName("images");
+                    writer.WriteStartArray();
+                    foreach (string imgUrl in imageUrls)
+                    {
+                        writer.WriteStringValue(imgUrl);
+                    }
+                    writer.WriteEndArray();
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
         }
 
         if (root.TryGetProperty("tools", out JsonElement tools))
@@ -465,6 +631,65 @@ internal static class OpenAiEndpoints
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
+    private static void RecordUsageFromResponse(
+        UsageTrackerService usageTracker,
+        string providerName,
+        string responseBody,
+        HttpHeaders responseHeaders,
+        HttpHeaders? trailingHeaders,
+        long latencyMs = 0,
+        string model = "")
+    {
+        Dictionary<string, string?> headers = new(StringComparer.OrdinalIgnoreCase);
+
+        void CollectHeaders(HttpHeaders source)
+        {
+            foreach (var h in source)
+            {
+                headers[h.Key] = string.Join(", ", h.Value);
+            }
+        }
+
+        CollectHeaders(responseHeaders);
+        if (trailingHeaders is not null)
+            CollectHeaders(trailingHeaders);
+
+        long promptTokens = 0, completionTokens = 0, totalTokens = 0;
+        bool hasUsage = false;
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(responseBody);
+            if (doc.RootElement.TryGetProperty("usage", out JsonElement usage))
+            {
+                if (usage.TryGetProperty("prompt_tokens", out JsonElement pt) && pt.ValueKind == JsonValueKind.Number)
+                {
+                    promptTokens = pt.GetInt64();
+                    hasUsage = true;
+                }
+                if (usage.TryGetProperty("completion_tokens", out JsonElement ct) && ct.ValueKind == JsonValueKind.Number)
+                {
+                    completionTokens = ct.GetInt64();
+                    hasUsage = true;
+                }
+                if (usage.TryGetProperty("total_tokens", out JsonElement tt) && tt.ValueKind == JsonValueKind.Number)
+                {
+                    totalTokens = tt.GetInt64();
+                    hasUsage = true;
+                }
+                if (totalTokens == 0 && promptTokens > 0 && completionTokens > 0)
+                {
+                    totalTokens = promptTokens + completionTokens;
+                }
+            }
+        }
+        catch { }
+
+        double cost = hasUsage ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+
+        usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
+    }
+
     private static string ConvertOllamaChatToOpenAiCompletion(string ollamaResponseBody, string effectiveModel)
     {
         using JsonDocument ollamaDoc = JsonDocument.Parse(ollamaResponseBody);
@@ -475,7 +700,6 @@ internal static class OpenAiEndpoints
             ? contentElement.GetString() ?? string.Empty
             : string.Empty;
 
-        // Fallback to `thinking` when content is empty (reasoning models put text in `thinking`).
         if (string.IsNullOrWhiteSpace(content) && message.ValueKind == JsonValueKind.Object && message.TryGetProperty("thinking", out JsonElement thinkingElement))
         {
             content = thinkingElement.GetString() ?? string.Empty;

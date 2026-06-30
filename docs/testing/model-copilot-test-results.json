@@ -1,0 +1,221 @@
+﻿{
+    "generated_at_utc":  "2026-06-11T19:54:33.3190006Z",
+    "proxy":  "http://localhost:11434",
+    "summary":  {
+                    "total":  26,
+                    "streaming_ok":  0,
+                    "streaming_fail":  26,
+                    "avg_ttfb_ms":  null,
+                    "avg_total_ms":  null
+                },
+    "results":  [
+                    {
+                        "model":  "moonshot-v1-128k-vision-preview",
+                        "timestamp":  "2026-06-11T19:54:18.2056817Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1532ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "nvidia/nemotron-3-ultra-550b-a55b",
+                        "timestamp":  "2026-06-11T19:54:19.7422436Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1366ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "nvidia/nemotron-3-ultra-550b-a55b:free",
+                        "timestamp":  "2026-06-11T19:54:21.1139140Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1483ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-32b",
+                        "timestamp":  "2026-06-11T19:54:11.9831676Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1415ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "meta-llama/llama-4-scout-17b-16e-instruct",
+                        "timestamp":  "2026-06-11T19:54:13.4039704Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2054ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "moonshot-v1-128k",
+                        "timestamp":  "2026-06-11T19:54:15.4643443Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2736ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "moonshot-v1-auto",
+                        "timestamp":  "2026-06-11T19:54:22.6006186Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1507ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "moonshot-v1-32k-vision-preview",
+                        "timestamp":  "2026-06-11T19:54:28.2339637Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1626ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "openai/gpt-oss-20b",
+                        "timestamp":  "2026-06-11T19:54:29.8654745Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1674ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3.5-397b-a17b",
+                        "timestamp":  "2026-06-11T19:54:31.5440579Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1424ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "openai/gpt-oss-120b",
+                        "timestamp":  "2026-06-11T19:54:24.1134066Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1307ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "deepseek/deepseek-v4-pro",
+                        "timestamp":  "2026-06-11T19:54:25.4252713Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1442ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "moonshot-v1-32k",
+                        "timestamp":  "2026-06-11T19:54:26.8720669Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1357ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-coder",
+                        "timestamp":  "2026-06-11T19:53:51.3404153Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1517ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-coder-30b-a3b-instruct",
+                        "timestamp":  "2026-06-11T19:53:52.8669415Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1409ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-coder-flash",
+                        "timestamp":  "2026-06-11T19:53:54.2805766Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2586ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "deepseek-v4-pro",
+                        "timestamp":  "2026-06-11T19:53:46.0283564Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2228ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "kimi-k2.6",
+                        "timestamp":  "2026-06-11T19:53:48.3137786Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1444ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "llama-3.3-70b-versatile",
+                        "timestamp":  "2026-06-11T19:53:49.7634633Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1573ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-coder-next",
+                        "timestamp":  "2026-06-11T19:53:56.8713553Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2101ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "moonshotai/kimi-k2.6",
+                        "timestamp":  "2026-06-11T19:54:05.5477675Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1981ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "nvidia/nemotron-3-super-120b-a12b",
+                        "timestamp":  "2026-06-11T19:54:07.5314088Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1757ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "nvidia/nemotron-3-super-120b-a12b:free",
+                        "timestamp":  "2026-06-11T19:54:09.2918817Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2687ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-coder-plus",
+                        "timestamp":  "2026-06-11T19:53:58.9806780Z",
+                        "nonstreaming":  "deepseek-v4-pro | 1516ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "qwen/qwen3-coder:free",
+                        "timestamp":  "2026-06-11T19:54:00.5008817Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2723ms | OK",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    },
+                    {
+                        "model":  "kimi-k2.5",
+                        "timestamp":  "2026-06-11T19:54:03.2264289Z",
+                        "nonstreaming":  "deepseek-v4-pro | 2317ms | (empty/reasoning)",
+                        "streaming":  "FAIL: No se encuentra el tipo [System.Net.Http.HttpClient].",
+                        "first_byte_ms":  0,
+                        "total_ms":  0
+                    }
+                ]
+}

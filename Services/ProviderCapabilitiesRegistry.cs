@@ -33,12 +33,22 @@ internal static class ProviderCapabilitiesRegistry
         ["moonshot"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: false,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
             DefaultBaseUrl: "https://api.moonshot.ai",
             EnvPrefix: "MOONSHOT"),
+
+        ["google"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: true,
+            SupportsTopK: false,
+            ChatPath: "v1beta/openai/chat/completions",
+            ModelsPath: "v1beta/openai/models",
+            DefaultBaseUrl: "https://generativelanguage.googleapis.com",
+            EnvPrefix: "GOOGLE"),
 
         ["cerebras"] = new(
             Category: ProviderCategory.Direct,
@@ -50,6 +60,16 @@ internal static class ProviderCapabilitiesRegistry
             DefaultBaseUrl: "https://api.cerebras.ai",
             EnvPrefix: "CEREBRAS"),
 
+
+        ["zai"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: true,
+            SupportsTopK: false,
+            ChatPath: "chat/completions",
+            ModelsPath: "models",
+            DefaultBaseUrl: "https://api.z.ai/api/paas/v4",
+            EnvPrefix: "ZAI"),
         // ── Multi-model providers (OpenAI-compatible API) ────────────────────
         ["nvidia"] = new(
             Category: ProviderCategory.MultiModel,
@@ -80,6 +100,17 @@ internal static class ProviderCapabilitiesRegistry
             ModelsPath: "v1/models",
             DefaultBaseUrl: "https://api.groq.com/openai",
             EnvPrefix: "GROQ"),
+
+        // ── Multi-model providers (ZenMux - aggregator) ─────────────────────
+        ["zenmux"] = new(
+            Category: ProviderCategory.MultiModel,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: false,
+            SupportsTopK: false,
+            ChatPath: "v1/chat/completions",
+            ModelsPath: "v1/models",
+            DefaultBaseUrl: "https://zenmux.ai/api",
+            EnvPrefix: "ZENMUX"),
 
         // ── Multi-model providers (Ollama API) ───────────────────────────────
         ["ollama"] = new(
