@@ -2,19 +2,21 @@
   "provider": "openai",
   "models": [
     {
+      "_comment": "gpt-5.5-pro is Responses-API only: /v1/chat/completions returns 404 'This is not a chat model'. Keep disabled for Ollama/BYOM clients.",
       "match": "gpt-5.5-pro",
       "priority": 1,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 400000,
         "max_output_tokens": 128000,
         "supports_tools": true,
         "supports_vision": true,
         "family": "openai",
-        "temperature": 0.2,
         "max_tokens": 8192,
         "reasoning_effort": "medium",
-        "timeout_seconds": 120
+        "timeout_seconds": 120,
+        "uses_max_completion_tokens": true,
+        "supports_temperature": false
       }
     },
     {
@@ -27,10 +29,11 @@
         "supports_tools": true,
         "supports_vision": true,
         "family": "openai",
-        "temperature": 0.2,
         "max_tokens": 8192,
         "reasoning_effort": "medium",
-        "timeout_seconds": 120
+        "timeout_seconds": 120,
+        "uses_max_completion_tokens": true,
+        "supports_temperature": false
       }
     },
     {
@@ -43,9 +46,10 @@
         "supports_tools": true,
         "supports_vision": true,
         "family": "openai",
-        "temperature": 0.2,
         "max_tokens": 8192,
-        "timeout_seconds": 120
+        "timeout_seconds": 120,
+        "uses_max_completion_tokens": true,
+        "supports_temperature": false
       }
     },
     {
@@ -58,9 +62,10 @@
         "supports_tools": true,
         "supports_vision": true,
         "family": "openai",
-        "temperature": 0.2,
         "max_tokens": 8192,
-        "timeout_seconds": 60
+        "timeout_seconds": 60,
+        "uses_max_completion_tokens": true,
+        "supports_temperature": false
       }
     },
     {
@@ -73,10 +78,11 @@
         "supports_tools": true,
         "supports_vision": false,
         "family": "openai",
-        "temperature": 1.0,
         "max_tokens": 16384,
         "reasoning_effort": "high",
-        "timeout_seconds": 120
+        "timeout_seconds": 120,
+        "uses_max_completion_tokens": true,
+        "supports_temperature": false
       }
     }
   ]

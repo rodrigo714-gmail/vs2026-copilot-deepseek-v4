@@ -1,63 +1,17 @@
 {
   "provider": "ollama",
+  "_comment": "Ollama Cloud (https://ollama.com). Single source of truth for the 'ollama' provider — do NOT add a second file declaring the same provider. Roster verified against GET https://ollama.com/api/tags on 2026-07-30.",
   "models": [
     {
-      "match": "qwen3-coder:480b",
+      "match": "kimi-k2.7-code",
       "priority": 1,
-      "enabled": true,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "qwen",
-        "temperature": 0.1,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "qwen3-coder-next",
-      "priority": 2,
-      "enabled": true,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "devstral-2:123b",
-      "priority": 4,
-      "enabled": true,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "mistral",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "kimi-k2.6",
-      "priority": 5,
       "enabled": true,
       "execution": {
         "context_length": 262144,
         "max_output_tokens": 262144,
         "supports_tools": true,
         "supports_vision": false,
+        "supports_reasoning": true,
         "family": "moonshotai",
         "temperature": 1.0,
         "top_p": 0.95,
@@ -67,92 +21,63 @@
       }
     },
     {
-      "match": "deepseek-v4-pro",
-      "priority": 6,
+      "match": "glm-5.2",
+      "priority": 2,
       "enabled": true,
       "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "deepseek-v4-pro",
+      "priority": 3,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 384000,
         "supports_tools": true,
         "supports_vision": false,
         "family": "deepseek",
         "temperature": 0.2,
-        "top_p": 0.9,
         "max_tokens": 16384,
+        "reasoning_effort": "high",
         "timeout_seconds": 180
       }
     },
     {
-      "match": "glm-5.1",
-      "priority": 7,
+      "_comment": "kimi-k3 answers HTTP 402: 'this model uses extra usage only (not included plan usage)'. Enable once the Ollama Cloud plan covers it.",
+      "match": "kimi-k3",
+      "priority": 4,
       "enabled": false,
       "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
+        "context_length": 262144,
+        "max_output_tokens": 262144,
         "supports_tools": true,
         "supports_vision": false,
-        "family": "glm",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 16384,
-        "timeout_seconds": 240
-      }
-    },
-    {
-      "match": "glm-5",
-      "priority": 8,
-      "enabled": false,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "glm",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "mistral-large-3:675b",
-      "priority": 9,
-      "enabled": false,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "mistral",
-        "temperature": 0.2,
+        "supports_reasoning": true,
+        "family": "moonshotai",
+        "temperature": 1.0,
         "top_p": 0.95,
         "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
-      "match": "cogito-2.1:671b",
-      "priority": 10,
-      "enabled": false,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "cogito",
-        "temperature": 0.6,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 240
+        "timeout_seconds": 240,
+        "override_client_params": true
       }
     },
     {
       "match": "minimax-m3",
-      "priority": 11,
-      "enabled": false,
+      "priority": 5,
+      "enabled": true,
       "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": false,
         "family": "minimax",
@@ -163,14 +88,128 @@
       }
     },
     {
-      "match": "qwen3-vl:235b",
-      "priority": 12,
+      "match": "nemotron-3-ultra",
+      "priority": 6,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "nvidia",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "nemotron-3-super",
+      "priority": 7,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "nvidia",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "glm-5.1",
+      "priority": 8,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "deepseek-v4-flash",
+      "priority": 9,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 131072,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "deepseek",
+        "temperature": 0.2,
+        "max_tokens": 16384,
+        "timeout_seconds": 180
+      }
+    },
+    {
+      "_comment": "Below: present in the live catalog but off the curated coding roster. Flip enabled to true to expose them in /api/tags.",
+      "match": "kimi-k2.6",
+      "priority": 20,
+      "enabled": false,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "moonshotai",
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "timeout_seconds": 180,
+        "override_client_params": true
+      }
+    },
+    {
+      "match": "gpt-oss:120b",
+      "priority": 10,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "openai",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "match": "mistral-large-3:675b",
+      "priority": 22,
       "enabled": false,
       "execution": {
         "context_length": 128000,
-        "max_output_tokens": 16384,
+        "max_output_tokens": 32768,
         "supports_tools": true,
-        "supports_vision": true,
+        "supports_vision": false,
+        "family": "mistralai",
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    },
+    {
+      "match": "qwen3.5:397b",
+      "priority": 23,
+      "enabled": false,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
         "family": "qwen",
         "temperature": 0.2,
         "top_p": 0.95,
@@ -179,24 +218,8 @@
       }
     },
     {
-      "match": "qwen3.5:397b",
-      "priority": 13,
-      "enabled": false,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 32768,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "max_tokens": 16384,
-        "timeout_seconds": 180
-      }
-    },
-    {
       "match": "gemma4:31b",
-      "priority": 14,
+      "priority": 24,
       "enabled": false,
       "execution": {
         "context_length": 128000,
@@ -207,22 +230,6 @@
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 8192,
-        "timeout_seconds": 120
-      }
-    },
-    {
-      "match": "kimi",
-      "priority": 15,
-      "enabled": false,
-      "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 8192,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "kimi",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_tokens": 4096,
         "timeout_seconds": 120
       }
     }

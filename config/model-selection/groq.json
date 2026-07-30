@@ -34,19 +34,20 @@
       }
     },
     {
-      "match": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "_comment": "meta-llama/llama-4-scout-17b-16e-instruct was removed from Groq's catalog (HTTP 404 model_not_found, verified 2026-07-30).",
+      "match": "groq/compound-mini",
       "priority": 3,
       "enabled": true,
       "execution": {
-        "context_length": 10000000,
-        "max_output_tokens": 16384,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
         "supports_tools": true,
-        "supports_vision": true,
-        "family": "meta",
-        "temperature": 0.3,
+        "supports_vision": false,
+        "family": "groq",
+        "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 4096,
-        "timeout_seconds": 45
+        "timeout_seconds": 60
       }
     },
     {
@@ -66,19 +67,20 @@
       }
     },
     {
-      "match": "qwen/qwen3-32b",
+      "_comment": "qwen/qwen3-32b was removed from Groq's catalog (HTTP 404 model_not_found, verified 2026-07-30).",
+      "match": "llama-3.1-8b-instant",
       "priority": 5,
       "enabled": true,
       "execution": {
         "context_length": 131072,
-        "max_output_tokens": 40960,
+        "max_output_tokens": 32768,
         "supports_tools": true,
         "supports_vision": false,
-        "family": "qwen",
-        "temperature": 0.2,
-        "top_p": 0.95,
+        "family": "meta",
+        "temperature": 0.3,
+        "top_p": 0.9,
         "max_tokens": 4096,
-        "timeout_seconds": 60
+        "timeout_seconds": 45
       }
     },
     {
