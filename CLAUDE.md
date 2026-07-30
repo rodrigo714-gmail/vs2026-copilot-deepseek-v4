@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+The project is **AI Proxy Hub** (GitHub: `rodrigo714-gmail/ai-proxy-hub`); the assembly, csproj and
+solution are all named `ai-proxy-hub`. Older names (`vs2026-copilot-deepseek-v4`,
+`deepseek-copilot-proxy`) are retired — do not reintroduce them.
+
 ## Branching rule (hard constraint)
 
 - **Never** touch `main`. It is the protected release branch.
@@ -14,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build
 dotnet build
 
-# Run all tests (329 tests, xUnit + WebApplicationFactory)
+# Run all tests (370 tests, xUnit + WebApplicationFactory, fully offline)
 dotnet test
 
 # Run specific test suite
@@ -32,7 +36,14 @@ dotnet test --verbosity detailed
 
 # Run the proxy locally (port 11434 default)
 dotnet run
+
+# Smoke-test every provider end-to-end, exactly as VS 2026 BYOM calls it
+./scripts/test-all-providers.ps1            # non-streaming
+./scripts/test-all-providers.ps1 -Stream    # streaming (what VS 2026 actually uses)
 ```
+
+**Port 11434 is the real Ollama daemon's port.** If Ollama is installed and running, the proxy
+cannot bind and will fail to start. Stop Ollama or set `PROXY_PORT` to something else.
 
 Tests live in `tests/ProxyTests/`. The project targets **.NET 10.0** and uses `WebApplication.CreateSlimBuilder()`.
 
@@ -45,7 +56,7 @@ A high-performance ASP.NET Core **minimal API proxy** that bridges GitHub Copilo
 | OpenAI-compatible | `/v1/*` | Copilot, Cursor, Continue.dev, OpenAI SDKs |
 | Ollama-compatible | `/api/*` | VS 2026 BYOM, native Ollama clients |
 
-**Supported providers (9):** DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux.
+**Supported providers (11):** DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux.
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated model configs are optimised for this workload.
 
@@ -89,7 +100,7 @@ ProviderBenchmarkService   →  Background HostedService monitoring provider hea
 
 ### Model Configuration
 
-Model metadata lives in `config/model-selection/{provider}.json` (9 files: `deepseek`, `openai`, `nvidia`, `groq`, `openrouter`, `moonshot`, `cerebras`, `ollamacloud`, `zenmux`). Each file maps model names to execution defaults:
+Model metadata lives in `config/model-selection/{provider}.json` (11 files: `deepseek`, `openai`, `google`, `nvidia`, `groq`, `openrouter`, `moonshot`, `cerebras`, `zai`, `ollama`, `zenmux`). The filename is cosmetic — the `"provider"` field inside is what binds the file to a provider, and **exactly one file may declare a given provider**. Each file maps model names to execution defaults:
 
 ```json
 {
@@ -113,35 +124,68 @@ Model metadata lives in `config/model-selection/{provider}.json` (9 files: `deep
 ```
 
 - **Adding a new model:** edit the JSON for its provider + restart (no hot reload)
-- **Adding a new provider:** create JSON + add provider to `ProviderRegistry.DiscoverProviders` + add HttpClient factory in `ProviderHttpClientFactory.cs`
+- **Adding a new provider:** add one entry to `ProviderCapabilitiesRegistry` + create its JSON. Nothing else — discovery, routing and filtering all read from that registry.
 - Models with `"enabled": false` are excluded from `/v1/models` and `/api/tags`
-- The `execution.override_client_params` flag (bool, default `false`) controls force-mode: when `true`, the proxy overwrites client-supplied `temperature` / `top_p` / `max_tokens` / `reasoning_effort` with the configured value (used by Moonshot Kimi K2.x which mandates `temperature=1.0`)
+- **Matching is by substring, longest match first.** `"gpt-5.4"` is a substring of `"gpt-5.4-mini"`, so specificity — not priority — decides which entry a model gets. Priority only breaks ties between equally specific entries.
+- `execution.override_client_params` (bool, default `false`) — force-mode: overwrite the client's `temperature` / `top_p` / `max_tokens` / `reasoning_effort` with the configured value (Moonshot Kimi K2.x mandates `temperature=1.0`)
+- `execution.uses_max_completion_tokens` (bool, default `false`) — send the token budget as `max_completion_tokens` and never `max_tokens`. Required by OpenAI GPT-5.x and the o-series, which answer HTTP 400 otherwise.
+- `execution.supports_temperature` (bool, default `true`) — when `false`, strip `temperature` and `top_p` entirely. Same OpenAI models.
 
 ### Curated model cap
 
-Each provider exposes **up to 9 enabled models** (DeepSeek and Cerebras expose 2, Ollama Cloud exposes 9). Curated picks prioritise coding strength for GitHub Copilot in Visual Studio 2026:
+Each provider exposes **up to ~10 enabled models**, curated for coding strength in GitHub Copilot
+inside Visual Studio 2026. Rosters were verified against each provider's live `/v1/models` (or
+`/api/tags`) on **2026-07-30** — every enabled entry answered a real request.
 
-| Provider | Top picks |
-|----------|-----------|
-| DeepSeek | deepseek-v4-pro, deepseek-v4-flash |
-| OpenAI | gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b |
-| NVIDIA NIM | qwen3-coder-480b, moonshotai/kimi-k2.6, nemotron-3-super-120b, openai/gpt-oss-120b, qwen3.5-397b |
-| Groq | llama-3.3-70b-versatile, qwen3-32b, llama-4-scout-17b, gpt-oss-120b, gpt-oss-20b |
-| OpenRouter | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro, qwen3.7-plus |
-| Moonshot | kimi-k2.6, kimi-k2.5, moonshot-v1-{128k,auto,32k} |
-| Cerebras | zai-glm-4.7, gpt-oss-120b |
-| Ollama Cloud | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5 |
-| ZenMux | glm-5.2-free 🆓, glm-5.2, kimi-k2.7-code-free 🆓, kimi-k2.7-code, qwen3.7-plus, qwen3.7-max, gemini-3.5-flash, gpt-5.5-pro, gpt-5.5, qwen3.6-plus, deepseek-v4-pro, deepseek-v4-flash, grok-4.3 |
+Retired or unentitled models are kept in the JSON with `"enabled": false` plus a `_comment`
+explaining why, so nobody re-adds them.
 
-### 3-level `provider/model` hint resolution
+**Verify before editing a roster.** `./scripts/test-all-providers.ps1` is the check: a model that
+`/v1/models` lists can still return 404 (not entitled), 410 (end of life) or 402 (needs a paid
+plan). NVIDIA's `moonshotai/kimi-k2.6` and Ollama Cloud's `kimi-k3` are both examples.
 
-`ProviderRegistry.ResolveModel(requestedModel)` tries three strategies in order to handle the OpenAI-style `provider/model` request form:
+### Model naming across the two API surfaces
+
+`/api/tags` publishes each model twice over:
+
+- `name` — `"GROQ - gpt-oss-120b:latest"`, the human-readable label Visual Studio shows.
+- `model` — `"openai/gpt-oss-120b@groq:latest"`, the id the client sends back.
+
+`ProviderRegistry.ResolveModel` must therefore cope with `<upstream>@<provider>:latest`, with the
+`"PROVIDER - model"` display form, and with the OpenAI-style `provider/model` form.
+
+Ollama upstream ids legitimately contain a colon (`gpt-oss:120b`, `mistral-large-3:675b`), so the
+`:latest` tag is stripped from the **end**, never from the first colon.
+
+An `@provider` (or `PROVIDER - `) hint that the named provider cannot satisfy falls back to the
+default model rather than resolving across providers — answering an explicit "OLLAMA - x" pick
+from NVIDIA is worse than an honest fallback.
+
+For the OpenAI-style `provider/model` form, `ResolveModel` tries three strategies in order:
 
 1. **Verbatim** — the full id exists in the registry (e.g. `openai/gpt-oss-120b` is a registered key).
-2. **Strip prefix** — strip the provider prefix and look up the bare name (e.g. `groq/qwen3-32b` → `qwen3-32b`).
-3. **Suffix match within hinted provider** — find any upstream id owned by the hinted provider whose suffix equals the bare name (e.g. `nvidia/qwen3.5-397b-a17b` matches NVIDIA's `qwen/qwen3.5-397b-a17b` upstream id). Must NOT cross providers — a `groq/` hint never resolves to an NVIDIA-owned id.
+2. **Strip prefix** — strip the provider prefix and look up the bare name (e.g. `groq/qwen3.6-27b` → `qwen3.6-27b`).
+3. **Suffix match within hinted provider** — find any upstream id owned by the hinted provider whose suffix equals the bare name. Must NOT cross providers — a `groq/` hint never resolves to an NVIDIA-owned id.
 
-The corresponding test file is `tests/ProxyTests/ProviderModelHintTests.cs`.
+The corresponding test files are `tests/ProxyTests/ProviderModelHintTests.cs` and
+`tests/ProxyTests/RoutingDiagnosticTests.cs`.
+
+### Streaming format conversion (critical for VS 2026)
+
+The two surfaces speak different stream formats, and each converts on the fly:
+
+| Endpoint | Emits | Converts from |
+|---|---|---|
+| `/api/chat` | Ollama NDJSON, one object per line, terminated by `"done": true` | upstream OpenAI SSE (`ChatStreamingService.StreamOllamaAndCache`) |
+| `/v1/chat/completions` | OpenAI SSE, terminated by `data: [DONE]` | upstream Ollama NDJSON (`OpenAiEndpoints.HandleOllamaCloudChatCompletion`) |
+
+`/api/chat` must **never** emit `data:` frames. An Ollama client silently discards them, so the
+model appears to answer nothing at all — which is exactly how this broke for 10 of the 11
+providers before. `EndpointTests.ApiChat_Streaming_LastLineHasDoneTrue` guards it.
+
+Reasoning models (DeepSeek, Nemotron, GLM) can spend their whole budget in `reasoning_content`
+and return empty `content`. Both directions fall back to the reasoning text so the client never
+sees a blank reply.
 
 ### Parameter Filtering Rules (RequestTransformer)
 
@@ -153,12 +197,35 @@ The corresponding test file is `tests/ProxyTests/ProviderModelHintTests.cs`.
 - `tools`/`tool_choice` → kept for DeepSeek, OpenAI, NVIDIA, OpenRouter, Moonshot, Cerebras; **removed for Groq** (Groq's chat API has tool quirks)
 - `function_call` → removed for all (deprecated)
 - `override_client_params=true` → force-overwrite the client value with the configured one for `temperature`, `top_p`, `max_tokens`, `reasoning_effort`
+- `uses_max_completion_tokens=true` → rewrite `max_tokens` to `max_completion_tokens` (OpenAI GPT-5.x / o-series)
+- `supports_temperature=false` → drop `temperature` and `top_p` entirely (same models)
 
-### Moonshot Kimi K2.x quirk
+### Provider-specific quirks
 
-The Kimi K2.5 and K2.6 models reject any request with `temperature ≠ 1.0`. The proxy handles this by setting `"override_client_params": true` in `moonshot.json` for those two entries. `RequestTransformer` then overwrites the client's `temperature` value (and `top_p`, `max_tokens`, `reasoning_effort` if they have configured values) before forwarding.
+**Moonshot Kimi K2.x** rejects any request with `temperature ≠ 1.0`. Handled with
+`"override_client_params": true` in `moonshot.json`; `RequestTransformer` overwrites the client's
+`temperature` (and `top_p`, `max_tokens`, `reasoning_effort` when configured) before forwarding.
+`OverrideClientParamsTests.cs` exercises it end-to-end.
 
-The `OverrideClientParamsTests.cs` test file exercises this end-to-end: `ApplyExecutionDefaults_OverrideClientParamsTrue_OverwritesClientTemperature` sends `{"temperature": 0.7}` and verifies the upstream body has `temperature: 1.0`.
+**OpenAI GPT-5.x / o-series** answers `400 Unsupported parameter: 'max_tokens'` and rejects an
+explicit temperature. Handled with `uses_max_completion_tokens` + `supports_temperature: false`
+in `openai.json`. `gpt-5.5-pro` is Responses-API only (`404 This is not a chat model`) and stays
+disabled for Ollama/BYOM clients.
+
+**Z.AI** puts its OpenAI-compatible API under `https://api.z.ai/api/paas/v4` with a *relative*
+chat path (`chat/completions`, no `v1/` prefix). `ProviderHttpClientFactory` appends a trailing
+slash to every base URL, without which `HttpClient` would resolve the relative path against the
+last path segment and silently drop `/v4`.
+
+### Upstream error handling
+
+`UpstreamErrorMiddleware` maps transport failures to responses a client can act on:
+`HttpRequestException` → **502 UPSTREAM_UNREACHABLE**, timeout → **504 UPSTREAM_TIMEOUT**, both
+with a JSON body naming the provider and model. Without it, an unreachable host or an expired
+`timeout_seconds` surfaced as an empty HTTP 500 and Visual Studio just said the model failed.
+
+An upstream 200 whose body isn't a parseable OpenAI completion returns **502** with the upstream
+body attached, rather than throwing.
 
 ### Configuration Sources (priority order)
 
@@ -172,8 +239,9 @@ The `OverrideClientParamsTests.cs` test file exercises this end-to-end: `ApplyEx
 Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** (no real API calls). The stub simulates OpenAI-compatible endpoints on a random port. Key patterns:
 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
-- Tests that mutate process env vars MUST share the `[Collection("Proxy")]` fixture (no parallel races)
-- **336 tests** across 14 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, **override_client_params semantics**, and **3-level `provider/model` hint resolution**
+- Tests that construct a `ProviderRegistry` or otherwise touch process env vars MUST be in `[Collection("Proxy")]` — `ProxyFixture` boots `Program.cs`, which loads the developer's real `.env` into the process, so anything running in parallel with it races
+- Those tests must also use `ProviderEnvScope`, which clears every `PROVIDER_*` variable derived from `ProviderCapabilitiesRegistry` and restores them on dispose. Never hand-write the list: a forgotten provider picks up a real API key from `.env` and quietly changes collision resolution
+- **370 tests** across 15 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
 
 ## Credential Separation
 
@@ -186,15 +254,18 @@ Per `.github/copilot-instructions.md`: **Never confuse Ollama Cloud API keys wit
 | File | Purpose |
 |---|---|
 | `Program.cs` | Entry point, DI registration, endpoint mapping, env-var discovery |
-| `Services/ProviderRegistry.cs` | Model → provider resolution; 3-level `provider/model` hint resolver; `ResolveCandidates` for failover lists |
-| `Services/RequestTransformer.cs` | Parameter filtering + default injection; `override_client_params` force-mode |
+| `Services/ProviderRegistry.cs` | Model → provider resolution; tag/`@provider`/`provider/model` hint resolvers; `ResolveCandidates` for failover lists |
+| `Services/RequestTransformer.cs` | Parameter filtering + default injection; `override_client_params` force-mode; `max_completion_tokens` rewrite |
 | `Services/ModelCatalogService.cs` | Live model catalog from all providers; cross-provider collision resolution |
-| `Services/ModelSelectionStore.cs` | JSON config loader for model defaults; parses `override_client_params` |
-| `Services/ChatStreamingService.cs` | SSE/NDJSON streaming handler |
-| `Services/ProviderHttpClientFactory.cs` | HttpClient creation with auth headers |
-| `Models/ModelExecutionConfig.cs` | record struct with `OverrideClientParams` field |
-| `Models/ProviderInfo.cs` | record struct `(Name, ApiKey, BaseUrl, Client)` |
+| `Services/ModelSelectionStore.cs` | JSON config loader; longest-match-first entry lookup; merges files declaring the same provider |
+| `Services/ChatStreamingService.cs` | Streaming; OpenAI SSE → Ollama NDJSON conversion incl. tool-call reassembly |
+| `Services/ProviderCapabilitiesRegistry.cs` | Single source of truth for provider base URLs, paths, env prefixes and parameter support |
+| `Services/ProviderHttpClientFactory.cs` | HttpClient creation with auth headers and base-URL normalisation |
+| `Models/ModelExecutionConfig.cs` | Per-model execution flags parsed from `execution` |
+| `Models/ProviderInfo.cs` | record struct `(Name, ApiKey, BaseUrl, Client, Capabilities)` |
 | `Infrastructure/ProxyAuthenticationMiddleware.cs` | Optional bearer token auth |
-| `config/model-selection/` | Per-provider model JSON configs (9 files) |
+| `Infrastructure/UpstreamErrorMiddleware.cs` | Transport failures → 502/504 JSON instead of empty 500 |
+| `config/model-selection/` | Per-provider model JSON configs (11 files) |
+| `scripts/test-all-providers.ps1` | Live end-to-end smoke test of every published model |
 
 Further detail is available in `docs/ARCHITECTURE.md`, `docs/AGENTS.md`, `docs/API.md`, `docs/CONFIGURATION.md`, `docs/TESTING.md`, and `docs/DEPLOYMENT.md`.

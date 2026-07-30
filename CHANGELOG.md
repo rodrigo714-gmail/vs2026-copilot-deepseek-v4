@@ -1,6 +1,56 @@
 # Changelog
 
-All notable changes to the Multi-Provider AI Proxy will be documented in this file.
+All notable changes to AI Proxy Hub (formerly "Multi-Provider AI Proxy") will be documented in
+this file.
+
+## 2026-07-30 — Rename to AI Proxy Hub, fix Ollama streaming, verify all 11 providers live
+
+### Fixed
+- **`/api/chat` streaming was silent for 10 of 11 providers.** It advertised
+  `application/x-ndjson` but forwarded the upstream OpenAI SSE verbatim; an Ollama client
+  (Visual Studio 2026 BYOM included) discards `data:` frames outright, so every OpenAI-format
+  provider looked like it answered nothing over streaming. `ChatStreamingService.StreamOllamaAndCache`
+  now converts each SSE chunk into a proper Ollama NDJSON line, including tool-call reassembly
+  and a `reasoning_content` fallback for reasoning-only responses.
+- **Ollama Cloud streaming used the wrong upstream path** (`"api/chat"` / `"v1/chat/completions"`
+  hardcoded instead of `ollamaProvider.Capabilities.ChatPath`), breaking any provider whose chat
+  path differs from the default.
+- **Tag stripping truncated Ollama Cloud ids at the first colon.** `StripTagSuffix` treated
+  `qwen3-coder:480b@ollama:latest` as tag `480b@ollama:latest`, mis-routing every model whose
+  upstream id embeds a colon. It now strips only the trailing `:latest` added by `/api/tags`.
+- **OpenAI GPT-5.x / o-series returned HTTP 400** (`Unsupported parameter: 'max_tokens'`) and
+  reasoning-model calls with an explicit temperature also failed. Added
+  `uses_max_completion_tokens` and `supports_temperature` execution flags; `gpt-5.5-pro` (Responses
+  API only, 404 on `/v1/chat/completions`) is disabled for Ollama/BYOM clients.
+- **`gpt-5.4-mini` inherited `gpt-5.4`'s context window.** `ModelSelectionStore` matched by
+  priority order, so the shorter substring `"gpt-5.4"` (priority 3) shadowed the more specific
+  `"gpt-5.4-mini"` (priority 5). Matching is now longest-substring-first, priority breaks ties only.
+- **Duplicate `"provider": "ollama"` declarations** across `ollama.json` and `ollamacloud.json`
+  fought over the same match strings, non-deterministically disabling enabled models depending on
+  file enumeration order. Merged into a single `ollama.json`; on a genuine conflict the enabled
+  entry now always wins.
+- **A provider hint the named provider can't satisfy resolved across providers** (e.g. an
+  "OLLAMA - x" pick silently answered by NVIDIA). Falls back to the default model instead.
+- **An upstream 200 with an unparseable body threw an unhandled exception**, surfacing as an
+  opaque, empty HTTP 500. Both `/api/chat` and a new `UpstreamErrorMiddleware` now return a JSON
+  error naming the provider, model and (for transport failures) 502/504 with the underlying cause.
+- Removed models confirmed dead against live provider catalogs: `meta-llama/llama-4-scout-17b`
+  and `qwen/qwen3-32b` (Groq, HTTP 404), `qwen/qwen3.5-397b-a17b` and
+  `qwen/qwen3-coder-480b-a35b-instruct` (NVIDIA, HTTP 410/gone), `moonshotai/kimi-k2.6` (NVIDIA,
+  not entitled on this key), `kimi-k3` (Ollama Cloud, requires a paid add-on plan).
+- Duplicate `app.MapDashboardEndpoints()` call in `Program.cs`.
+
+### Changed
+- Project renamed **AI Proxy Hub** end to end: startup banner, `docker-compose.yml` service/image
+  name, `/health` response, root `README.md` (new), `docs/README.md`, CI workflow .NET version
+  (8.0.x → 10.0.x, was mismatched with the net10.0 target).
+- `config/model-selection/nvidia.json` and `groq.json` rosters re-verified against each
+  provider's live `/v1/models` and re-curated around what's actually reachable.
+- `scripts/test-all-providers.ps1` (new): drives `/api/tags` → `/api/chat` exactly as VS 2026
+  BYOM does, for every published model, streaming or not, and reports per-provider pass/fail.
+- Test suite: 8 pre-existing failures fixed, all stale model references updated to the verified
+  roster, env-var isolation between tests consolidated into `ProviderEnvScope` (was three
+  hand-copied, drifting lists). 370/370 passing, fully offline.
 
 ## 2026-06-11 — Add Qwen 3.7 Plus (OpenRouter), restore provider prefix in /api/tags
 

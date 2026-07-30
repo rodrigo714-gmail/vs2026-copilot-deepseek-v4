@@ -9,6 +9,8 @@ internal static class HealthEndpoints
             return Results.Ok(new
             {
                 status = "ok",
+                name = ProxyVersion.Name,
+                version = ProxyVersion.Current,
                 model = providerRegistry.DefaultModel,
                 available_models = modelCatalog.AvailableModels,
                 providers = providerRegistry.Providers.Select(p => p.Name).ToArray(),

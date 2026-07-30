@@ -1,8 +1,8 @@
 services:
-  deepseek-proxy:
+  ai-proxy-hub:
     build: .
-    image: deepseek-copilot-proxy:latest
-    container_name: deepseek-proxy
+    image: ai-proxy-hub:latest
+    container_name: ai-proxy-hub
     ports:
       - "${PROXY_PORT:-11434}:${PROXY_PORT:-11434}"
     env_file:

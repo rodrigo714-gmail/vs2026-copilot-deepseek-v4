@@ -91,7 +91,7 @@ dotnet test --filter TestMethodName=MySpecificTest
 ### Via PowerShell
 
 ```powershell
-cd D:\repos\vs2026-copilot-deepseek-v4
+cd D:\repos\ai-proxy-hub
 
 # Run all tests with real-time output
 dotnet test --logger "console;verbosity=detailed"

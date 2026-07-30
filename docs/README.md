@@ -1,24 +1,24 @@
-# Multi-Provider AI Proxy
+# AI Proxy Hub
 
-> The fastest way to run DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
+> The fastest way to run DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, and Ollama Cloud models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
 
-**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 376 tests (340 + 36 integration)
+**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 370 offline tests
 
-A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **9 AI providers**: DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama Cloud. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
+A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **11 AI providers**: DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, and Ollama Cloud. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
 | 🏗️ | Details |
 |---|---|
-| **Providers** | DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux |
+| **Providers** | DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux |
 | **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
-| **Tests** | **376 tests** (340 passing + 36 integration requiring API keys) ✅ |
+| **Tests** | **370 tests**, all offline ✅ |
 | **Deploy** | Docker / bare metal |
 
 ## Key Features
 
 - **🧠 Reasoning Content Caching** — Automatically captures DeepSeek's `reasoning_content` and re-injects it on subsequent messages for true multi-turn reasoning
-- **🌐 Multi-Provider Support (9 providers)** — Route requests to any provider based on model name
+- **🌐 Multi-Provider Support (11 providers)** — Route requests to any provider based on model name
 - **🔄 Dual API Compatibility**
   - **OpenAI-compatible** (`/v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, any OpenAI SDK
   - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
@@ -81,7 +81,7 @@ docker compose up -d
 dotnet run
 ```
 
-You should see startup output listing the 9 providers (whichever have keys) and ~60 curated models.
+You should see startup output listing the providers that have keys and the curated models they expose.
 
 ## API Reference
 
@@ -191,7 +191,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 376 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support
+- **Test coverage:** 370 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support
 
 ## Testing
 

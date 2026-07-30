@@ -50,7 +50,7 @@ For direct binary execution on Linux/Windows/macOS.
 
 ```bash
 # 1. Clone or navigate to repo
-cd /path/to/vs2026-copilot-deepseek-v4
+cd /path/to/ai-proxy-hub
 
 # 2. Create .env file
 cp .env.example .env
@@ -115,7 +115,7 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 EXPOSE 11434
-ENTRYPOINT ["dotnet", "vs2026-copilot-deepseek-v4.dll"]
+ENTRYPOINT ["dotnet", "ai-proxy-hub.dll"]
 ```
 
 **Image size:** ~150 MB (runtime + proxy binary)  
@@ -203,8 +203,8 @@ server {
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/rodrigo714-gmail/vs2026-copilot-deepseek-v4.git
-cd vs2026-copilot-deepseek-v4
+git clone https://github.com/rodrigo714-gmail/ai-proxy-hub.git
+cd ai-proxy-hub
 
 # 2. Create .env file
 cp .env.example .env
@@ -215,7 +215,7 @@ dotnet run --configuration Release
 
 # Or publish as self-contained
 dotnet publish -c Release --self-contained
-./<output>/vs2026-copilot-deepseek-v4.exe
+./<output>/ai-proxy-hub.exe
 ```
 
 ### Systemd Service (Linux)
@@ -231,7 +231,7 @@ After=network.target
 Type=simple
 User=proxy
 WorkingDirectory=/opt/proxy
-ExecStart=/usr/bin/dotnet /opt/proxy/vs2026-copilot-deepseek-v4.dll
+ExecStart=/usr/bin/dotnet /opt/proxy/ai-proxy-hub.dll
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal
@@ -260,7 +260,7 @@ With `NSSM` (Non-Sucking Service Manager):
 
 ```bash
 # Install
-nssm install proxy "C:\Program Files\dotnet\dotnet.exe" "C:\proxy\vs2026-copilot-deepseek-v4.dll"
+nssm install proxy "C:\Program Files\dotnet\dotnet.exe" "C:\proxy\ai-proxy-hub.dll"
 
 # Set working directory
 nssm set proxy AppDirectory "C:\proxy"
@@ -633,7 +633,7 @@ curl http://localhost:11434/health
 
 ```bash
 # Backup current binary
-cp vs2026-copilot-deepseek-v4 vs2026-copilot-deepseek-v4.old
+cp ai-proxy-hub ai-proxy-hub.old
 
 # Stop service
 systemctl stop proxy
