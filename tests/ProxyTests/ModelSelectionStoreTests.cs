@@ -51,37 +51,40 @@ public class ModelSelectionStoreTests
         Assert.True(entries.Length > 5, $"Expected merged entries, got {entries.Length}");
     }
 
+    /// <summary>
+    /// Ollama Cloud ids can embed a colon ("gpt-oss:120b"); the store must match them whole.
+    /// </summary>
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Qwen3Coder480B_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_GptOss120b_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder:480b", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("gpt-oss:120b", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("qwen3-coder:480b", entry.Value.Match);
+        Assert.Equal("gpt-oss:120b", entry.Value.Match);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Devstral_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_Nemotron3Super_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("devstral-2:123b", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("nemotron-3-super", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("devstral-2:123b", entry.Value.Match);
+        Assert.Equal("nemotron-3-super", entry.Value.Match);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_KimiK26_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_KimiK27Code_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.6", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.7-code", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("kimi-k2.6", entry.Value.Match);
+        Assert.Equal("kimi-k2.7-code", entry.Value.Match);
     }
 
     [Fact]
@@ -96,14 +99,14 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Ollama_Qwen3CoderNext_FindsEntry()
+    public void FindModelSelectionEntry_Ollama_Glm52_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder-next", "ollama");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.2", "ollama");
 
         Assert.NotNull(entry);
-        Assert.Equal("qwen3-coder-next", entry.Value.Match);
+        Assert.Equal("glm-5.2", entry.Value.Match);
     }
 
     [Fact]
@@ -161,13 +164,13 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_Qwen3Coder480B_HasContextLength()
+    public void GetExecutionConfigForModel_OllamaCloud_GptOss120b_HasContextLength()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("qwen3-coder:480b", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("gpt-oss:120b", registry.ModelToProvider);
 
         Assert.True(config.ContextLength.HasValue);
     }
@@ -189,34 +192,34 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_Devstral_HasLowTemperature()
+    public void GetExecutionConfigForModel_OllamaCloud_Nemotron3Super_HasLowTemperature()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
         ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("devstral-2:123b", registry.ModelToProvider);
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("nemotron-3-super", registry.ModelToProvider);
 
         Assert.True(config.Temperature.HasValue);
         Assert.Equal(0.2, config.Temperature.Value);
     }
 
     [Fact]
-    public void IsPreferredModel_OllamaCloud_Qwen3Coder480B_ReturnsTrue()
+    public void IsPreferredModel_OllamaCloud_GptOss120b_ReturnsTrue()
     {
         ModelSelectionStore store = new();
 
-        bool isPreferred = store.IsPreferredModel("qwen3-coder:480b", "ollama");
+        bool isPreferred = store.IsPreferredModel("gpt-oss:120b", "ollama");
 
         Assert.True(isPreferred);
     }
 
     [Fact]
-    public void IsPreferredModel_OllamaCloud_Devstral_ReturnsTrue()
+    public void IsPreferredModel_OllamaCloud_Nemotron3Super_ReturnsTrue()
     {
         ModelSelectionStore store = new();
 
-        bool isPreferred = store.IsPreferredModel("devstral-2:123b", "ollama");
+        bool isPreferred = store.IsPreferredModel("nemotron-3-super", "ollama");
 
         Assert.True(isPreferred);
     }

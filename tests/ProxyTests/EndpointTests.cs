@@ -221,74 +221,30 @@ public class EndpointTests(ProxyFixture fixture)
 
         Assert.NotEmpty(lines);
 
-        // The proxy converts OpenAI SSE → Ollama NDJSON. The last meaningful line
-        // may be "data: [DONE]" (SSE terminator) or a NDJSON line with "done":true.
-        // Try to find any valid JSON line with "done":true; if none, the last line
-        // should be the [DONE] sentinel which is acceptable for the SSE→NDJSON
-        // conversion path (the [DONE] is a stream terminator, not an error).
+        // /api/chat speaks the Ollama protocol. Every line must be a bare NDJSON object —
+        // never an SSE "data:" frame, which an Ollama client (Visual Studio 2026 BYOM
+        // included) silently discards, making the model look like it answered nothing.
+        foreach (string line in lines)
+        {
+            Assert.False(line.TrimStart().StartsWith("data:", StringComparison.Ordinal),
+                $"/api/chat must not emit SSE frames, got: {line}");
+        }
+
         bool foundDoneTrue = false;
         foreach (string line in lines)
         {
-            string trimmed = line.Trim();
-            if (trimmed.StartsWith("data: "))
-                trimmed = trimmed["data: ".Length..].Trim();
+            using JsonDocument d = JsonDocument.Parse(line.Trim());
+            Assert.True(d.RootElement.TryGetProperty("message", out JsonElement message),
+                $"Every NDJSON line needs a 'message' object, got: {line}");
+            Assert.True(message.TryGetProperty("role", out _),
+                $"Every 'message' needs a role, got: {line}");
 
-            if (trimmed == "[DONE]")
-            {
-                // SSE terminator — acceptable
-                continue;
-            }
-
-            try
-            {
-                using JsonDocument d = JsonDocument.Parse(trimmed);
-                if (d.RootElement.TryGetProperty("done", out JsonElement done) && done.GetBoolean())
-                {
-                    foundDoneTrue = true;
-                    break;
-                }
-            }
-            catch { }
+            if (d.RootElement.TryGetProperty("done", out JsonElement done) && done.GetBoolean())
+                foundDoneTrue = true;
         }
 
-        // The Ollama→OpenAI streaming path may pass through raw SSE (data: [DONE])
-        // rather than converting to Ollama NDJSON. Both are valid: accept either
-        // {"done":true} NDJSON or the raw SSE with finish_reason="stop".
-        bool foundFinishReasonStop = false;
-        bool foundSSEDone = false;
-        foreach (string line in lines)
-        {
-            string trimmed = line.Trim();
-            if (trimmed.StartsWith("data: "))
-                trimmed = trimmed["data: ".Length..].Trim();
-
-            if (trimmed == "[DONE]")
-            {
-                foundSSEDone = true;
-                continue;
-            }
-
-            try
-            {
-                using JsonDocument d = JsonDocument.Parse(trimmed);
-                if (d.RootElement.TryGetProperty("done", out JsonElement done) && done.GetBoolean())
-                {
-                    foundDoneTrue = true;
-                }
-                if (d.RootElement.TryGetProperty("choices", out JsonElement choices) &&
-                    choices.GetArrayLength() > 0 &&
-                    choices[0].TryGetProperty("finish_reason", out JsonElement fr) &&
-                    fr.GetString() == "stop")
-                {
-                    foundFinishReasonStop = true;
-                }
-            }
-            catch { }
-        }
-
-        bool passed = foundDoneTrue || (foundFinishReasonStop && foundSSEDone);
-        Assert.True(passed,
-            $"Expected stream completion signal. got done:true={foundDoneTrue}, finish_reason=stop={foundFinishReasonStop}, [DONE]={foundSSEDone}. Lines: {string.Join(" | ", lines.Take(10))}");
+        Assert.True(foundDoneTrue,
+            $"Expected a terminating NDJSON line with \"done\":true. Lines: {string.Join(" | ", lines.Take(10))}");
     }
 
     // OpenAI-compatible /v1/chat/completions ────────────────────────────────────

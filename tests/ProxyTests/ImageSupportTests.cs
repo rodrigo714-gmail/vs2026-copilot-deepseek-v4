@@ -428,20 +428,24 @@ public class ImageSupportTests
     //  TEST 7: ModelSelectionStore — identifica modelos con soporte visión
     // ──────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Ollama Cloud's curated coding roster is text-only right now, so /api/tags must not
+    /// advertise vision for any of its models — Copilot would offer image attachments that
+    /// the upstream would then reject.
+    /// </summary>
     [Fact]
-    public void ModelSelectionStore_OllamaCloud_Qwen3Vl_HasVision()
+    public void ModelSelectionStore_OllamaCloud_EnabledModels_DoNotClaimVision()
     {
-        // qwen3-vl:235b en ollamacloud.json tiene supports_vision: true pero está disabled
-        ModelSelectionEntry? entry = _store.FindModelSelectionEntry("qwen3-vl:235b", "ollama");
+        ModelSelectionEntry[] enabled = _store.GetProviderModelSelections("ollama")
+            .Where(e => e.Enabled)
+            .ToArray();
 
-        // El entry existe aunque esté disabled (FindModelSelectionEntry solo retorna enabled)
-        // Como está enabled: false, FindModelSelectionEntry retorna null
-        // Verificamos que al menos el provider tiene la entry
-        ModelSelectionEntry[] ollamaEntries = _store.GetProviderModelSelections("ollama");
-        bool hasVisionEntry = ollamaEntries.Any(e =>
-            e.Match.Contains("vl") && (e.Execution.SupportsVision ?? false));
-
-        Assert.True(hasVisionEntry, "ollama provider should have at least one vision-capable entry");
+        Assert.NotEmpty(enabled);
+        foreach (ModelSelectionEntry entry in enabled)
+        {
+            Assert.False(entry.Execution.SupportsVision ?? false,
+                $"ollama/{entry.Match}: no Ollama Cloud model on the curated roster supports vision");
+        }
     }
 
     [Fact]
@@ -477,10 +481,10 @@ public class ImageSupportTests
     }
 
     [Fact]
-    public void ModelSelectionStore_OllamaCloud_Qwen3Coder_DoesNotHaveVision()
+    public void ModelSelectionStore_OllamaCloud_GptOss120b_DoesNotHaveVision()
     {
-        // qwen3-coder:480b en ollamacloud.json NO tiene supports_vision
-        ModelSelectionEntry? entry = _store.FindModelSelectionEntry("qwen3-coder:480b", "ollama");
+        // gpt-oss:120b en ollama.json NO tiene supports_vision
+        ModelSelectionEntry? entry = _store.FindModelSelectionEntry("gpt-oss:120b", "ollama");
 
         Assert.NotNull(entry);
         Assert.False(entry.Value.Execution.SupportsVision ?? false);

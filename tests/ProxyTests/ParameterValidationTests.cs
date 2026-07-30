@@ -89,11 +89,11 @@ public class ParameterValidationTests
 
     public static TheoryData<string> NvidiaModels =>
     [
-        "qwen/qwen3-coder-480b-a35b-instruct",
-        "moonshotai/kimi-k2.6",
         "nvidia/nemotron-3-super-120b-a12b",
+        "z-ai/glm-5.2",
+        "deepseek-ai/deepseek-v4-pro",
         "openai/gpt-oss-120b",
-        "qwen/qwen3.5-397b-a17b"
+        "nvidia/nemotron-3-ultra-550b-a55b"
     ];
 
     [Theory]
@@ -122,21 +122,47 @@ public class ParameterValidationTests
 
     // ─── OpenAI ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// GPT-5.x and the o-series answer 400 "Unsupported parameter: 'max_tokens'".
+    /// The budget must go out as max_completion_tokens, and max_tokens must be absent.
+    /// </summary>
     [Theory]
     [InlineData("gpt-5.5-pro")]
     [InlineData("gpt-5.5")]
     [InlineData("gpt-5.4")]
     [InlineData("gpt-5.4-mini")]
     [InlineData("o4-mini")]
-    public void OpenAI_Models_MaxTokensInjected(string model)
+    public void OpenAI_Models_MaxCompletionTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "openai");
 
-        Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
-            $"OpenAI/{model}: max_tokens should be injected");
+        Assert.True(result.TryGetProperty("max_completion_tokens", out JsonElement maxTok),
+            $"OpenAI/{model}: max_completion_tokens should be injected");
         Assert.True(maxTok.GetInt32() > 0,
-            $"OpenAI/{model}: max_tokens must be positive");
+            $"OpenAI/{model}: max_completion_tokens must be positive");
+        Assert.False(result.TryGetProperty("max_tokens", out _),
+            $"OpenAI/{model}: max_tokens must NOT be sent (rejected by the OpenAI API)");
+    }
+
+    /// <summary>
+    /// The same models also reject an explicit temperature/top_p.
+    /// </summary>
+    [Theory]
+    [InlineData("gpt-5.5")]
+    [InlineData("gpt-5.4")]
+    [InlineData("gpt-5.4-mini")]
+    [InlineData("o4-mini")]
+    public void OpenAI_Models_SamplingParamsStripped(string model)
+    {
+        RequestTransformer sut = CreateTransformer();
+        string body = """{"model":"x","messages":[],"temperature":0.7,"top_p":0.5}""";
+        JsonElement result = TransformWithBody(sut, body, model, "openai");
+
+        Assert.False(result.TryGetProperty("temperature", out _),
+            $"OpenAI/{model}: temperature must NOT be sent");
+        Assert.False(result.TryGetProperty("top_p", out _),
+            $"OpenAI/{model}: top_p must NOT be sent");
     }
 
     [Theory]
@@ -200,9 +226,9 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("qwen/qwen3.6-27b")]
     [InlineData("openai/gpt-oss-120b")]
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
+    [InlineData("groq/compound-mini")]
     [InlineData("llama-3.3-70b-versatile")]
-    [InlineData("qwen/qwen3-32b")]
+    [InlineData("llama-3.1-8b-instant")]
     [InlineData("openai/gpt-oss-20b")]
     [InlineData("groq/compound")]
     public void Groq_Models_MaxTokensInjected(string model)
@@ -218,9 +244,9 @@ public class ParameterValidationTests
     // ─── Ollama Cloud ────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("qwen3-coder:480b")]
-    [InlineData("devstral-2:123b")]
-    [InlineData("kimi-k2.6")]
+    [InlineData("gpt-oss:120b")]
+    [InlineData("nemotron-3-super")]
+    [InlineData("kimi-k2.7-code")]
     public void OllamaCloud_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -351,7 +377,6 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("deepseek-v4-flash", "deepseek")]
-    [InlineData("gpt-5.5-pro",       "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
     [InlineData("moonshot-v1-128k",  "moonshot")]
     public void ClientSupplied_MaxTokens_IsNotOverridden(string model, string provider)
@@ -413,18 +438,13 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",              1_048_576, 384_000)]
     [InlineData("deepseek-v4-flash",            1_048_576, 131_072)]
-    [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
     [InlineData("moonshotai/kimi-k2.6",          262_144, 262_144)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
-    [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
-    [InlineData("gpt-5.5-pro",   400_000, 128_000)]
     [InlineData("gpt-5.5",       400_000, 128_000)]
     [InlineData("gpt-5.4",       400_000,  65_536)]
     [InlineData("gpt-5.4-mini",  200_000,  32_768)]
     [InlineData("o4-mini",       200_000, 100_000)]
     [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
-    [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
     [InlineData("openai/gpt-oss-20b",         131_072, 65_536)]
     [InlineData("kimi-k2.7-code",            262_144, 131_072)]
     [InlineData("kimi-k2.6",                 262_144, 131_072)]
@@ -437,9 +457,6 @@ public class ParameterValidationTests
     [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
     [InlineData("zai-glm-4.7",  128_000, 32_768)]
     [InlineData("gpt-oss-120b", 131_072, 65_536)]
-    [InlineData("qwen3-coder:480b",    128_000, 32_768)]
-    [InlineData("qwen3-coder-next",    128_000, 32_768)]
-    [InlineData("devstral-2:123b",     128_000, 32_768)]
     public void AllModels_HaveCorrectContextWindowConfig(
         string model, int expectedContextLength, int minMaxOutput)
     {
@@ -547,14 +564,13 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek", 2)]      // v4-pro + v4-flash (coder-6.7b disabled)
-    [InlineData("openai", 5)]        // gpt-5.5-pro, gpt-5.5, gpt-5.4, gpt-5.4-mini, o4-mini
-    [InlineData("nvidia", 6)]
+    [InlineData("openai", 4)]        // gpt-5.5, gpt-5.4, gpt-5.4-mini, o4-mini (gpt-5.5-pro is Responses-API only)
+    [InlineData("nvidia", 8)]
     [InlineData("groq", 7)]
     [InlineData("openrouter", 10)]
     [InlineData("moonshot", 6)]      // 6 enabled (kimi-k2.5 disabled)
     [InlineData("cerebras", 2)]
-    [InlineData("ollama", 15)]       // 5 ollama.json + 10 ollamacloud.json merged
-    [InlineData("ollamacloud", 10)]  // 10 enabled
+    [InlineData("ollama", 9)]        // curated Ollama Cloud roster, single ollama.json
     [InlineData("zenmux", 14)]       // 14 enabled (multi-provider aggregator)
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {

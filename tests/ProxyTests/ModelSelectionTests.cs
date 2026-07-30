@@ -321,13 +321,12 @@ public class ModelSelectionTests
         var selections = LoadFromDir(Path.GetDirectoryName(configPath)!);
 
         Assert.True(selections.ContainsKey("nvidia"));
-        // The first three enabled entries are the curated coding-first picks:
-        // qwen3-coder-480b, kimi-k2.6, nemotron-3-super-120b.
+        // The curated coding-first picks, all verified present in NVIDIA's live catalog.
         ModelSelectionEntry[] enabled = selections["nvidia"].Where(e => e.Enabled).ToArray();
         Assert.True(enabled.Length >= 3, $"Expected >= 3 enabled NVIDIA models, got {enabled.Length}");
-        Assert.Contains(enabled, e => e.Match == "qwen/qwen3-coder-480b-a35b-instruct");
-        Assert.Contains(enabled, e => e.Match == "moonshotai/kimi-k2.6");
         Assert.Contains(enabled, e => e.Match == "nvidia/nemotron-3-super-120b-a12b");
+        Assert.Contains(enabled, e => e.Match == "z-ai/glm-5.2");
+        Assert.Contains(enabled, e => e.Match == "deepseek-ai/deepseek-v4-pro");
     }
 
     [Fact]

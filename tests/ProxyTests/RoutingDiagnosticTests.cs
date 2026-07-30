@@ -19,39 +19,9 @@ namespace ProxyTests;
 [Collection("Proxy")]
 public class RoutingDiagnosticTests : IDisposable
 {
-    private readonly Dictionary<string, string?> _envSnapshot;
+    private readonly ProviderEnvScope _envScope = new();
 
-    public RoutingDiagnosticTests()
-    {
-        // Snapshot and clear all provider env vars
-        string[] keys =
-        [
-            "PROVIDER_DEEPSEEK_API_KEY", "PROVIDER_DEEPSEEK_BASE_URL",
-            "PROVIDER_OPENAI_API_KEY", "PROVIDER_OPENAI_BASE_URL",
-            "PROVIDER_NVIDIA_API_KEY", "PROVIDER_NVIDIA_BASE_URL",
-            "PROVIDER_OPENROUTER_API_KEY", "PROVIDER_OPENROUTER_BASE_URL",
-            "PROVIDER_GROQ_API_KEY", "PROVIDER_GROQ_BASE_URL",
-            "PROVIDER_OLLAMACLOUD_API_KEY", "PROVIDER_OLLAMA_API_KEY", "PROVIDER_OLLAMA_BASE_URL",
-            "PROVIDER_GOOGLE_API_KEY", "PROVIDER_GOOGLE_BASE_URL",
-            "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
-            "PROVIDER_CEREBRAS_API_KEY", "PROVIDER_CEREBRAS_BASE_URL",
-            "PROVIDER_ZENMUX_API_KEY", "PROVIDER_ZENMUX_BASE_URL",
-            "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
-            "DEEPSEEK_MODEL"
-        ];
-        _envSnapshot = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (string k in keys)
-        {
-            _envSnapshot[k] = Environment.GetEnvironmentVariable(k);
-            Environment.SetEnvironmentVariable(k, null);
-        }
-    }
-
-    public void Dispose()
-    {
-        foreach (KeyValuePair<string, string?> kv in _envSnapshot)
-            Environment.SetEnvironmentVariable(kv.Key, kv.Value);
-    }
+    public void Dispose() => _envScope.Dispose();
 
     private const string AnyKey = "test-key";
 
@@ -104,23 +74,22 @@ public class RoutingDiagnosticTests : IDisposable
     // ──────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// kimi2.7-code solo está configurado en ollamacloud.json.
+    /// kimi-k2.7-code solo está habilitado en ollama.json.
     /// deepseek.json NO tiene un match para "kimi". Debe enrutar a ollama.
     /// </summary>
     [Fact]
-    public async Task Kimi27Code_OnlyInOllamaCloud_RoutesToOllama()
+    public async Task KimiK27Code_OnlyInOllamaCloud_RoutesToOllama()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(new Dictionary<string, string[]>
             {
                 ["deepseek"] = ["deepseek-v4-pro"],
-                ["ollama"] = ["kimi2.7-code"],
+                ["ollama"] = ["kimi-k2.7-code"],
             });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        // kimi2.7-code solo existe en ollamacloud.json (provider "ollama")
-        ProviderInfo provider = registry.ResolveProvider("kimi2.7-code");
+        ProviderInfo provider = registry.ResolveProvider("kimi-k2.7-code");
         Assert.Equal("ollama", provider.Name);
     }
 
@@ -144,23 +113,27 @@ public class RoutingDiagnosticTests : IDisposable
     }
 
     /// <summary>
-    /// qwen3-coder:480b está SOLO en ollamacloud.json (no en deepseek, nvidia, etc.).
-    /// Debe enrutar a ollama.
+    /// gpt-oss:120b (id de Ollama Cloud con dos puntos) está SOLO en ollama.json.
+    /// Debe enrutar a ollama sin que el tag se confunda con ":latest".
     /// </summary>
     [Fact]
-    public async Task Qwen3Coder480B_OnlyInOllamaCloud_RoutesToOllama()
+    public async Task GptOss120b_OnlyInOllamaCloud_RoutesToOllama()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(new Dictionary<string, string[]>
             {
                 ["deepseek"] = ["deepseek-v4-pro", "other-model"],
-                ["ollama"] = ["qwen3-coder:480b"],
+                ["ollama"] = ["gpt-oss:120b"],
             });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        ProviderInfo provider = registry.ResolveProvider("qwen3-coder:480b");
+        ProviderInfo provider = registry.ResolveProvider("gpt-oss:120b");
         Assert.Equal("ollama", provider.Name);
+
+        // Tal y como lo devuelve /api/tags a Visual Studio 2026 BYOM.
+        Assert.Equal("gpt-oss:120b@ollama", registry.ResolveModel("gpt-oss:120b@ollama:latest"));
+        Assert.Equal("gpt-oss:120b", registry.ResolveUpstreamModel("gpt-oss:120b@ollama:latest"));
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -169,30 +142,28 @@ public class RoutingDiagnosticTests : IDisposable
     // ──────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// kimi-k2.6 está en moonshot.json (prio 1) y en ollamacloud.json (prio 7).
-    /// Debe enrutar a moonshot (prio 1 < 7), NO a ollama.
+    /// kimi-k2.7-code está habilitado en moonshot.json y en ollama.json, ambos con prioridad 1.
+    /// El empate se rompe por orden de descubrimiento de proveedores → moonshot antes que ollama.
     /// </summary>
     [Fact]
-    public async Task KimiK26_SharedBetweenMoonshotAndOllama_RoutesToMoonshot()
+    public async Task KimiK27Code_SharedBetweenMoonshotAndOllama_RoutesToMoonshot()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(new Dictionary<string, string[]>
             {
-                ["moonshot"] = ["kimi-k2.6"],
-                ["ollama"] = ["kimi-k2.6"],
+                ["moonshot"] = ["kimi-k2.7-code"],
+                ["ollama"] = ["kimi-k2.7-code"],
             },
             ollamaProviders: ["ollama"]);
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        // moonshot.json tiene priority 1 para "kimi-k2.6"; ollamacloud.json tiene priority 7.
-        // El menor número gana → moonshot.
-        ProviderInfo provider = registry.ResolveProvider("kimi-k2.6");
+        ProviderInfo provider = registry.ResolveProvider("kimi-k2.7-code");
         Assert.Equal("moonshot", provider.Name);
 
         // Failover: primero moonshot, luego ollama
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
-            registry.ResolveCandidates("kimi-k2.6");
+            registry.ResolveCandidates("kimi-k2.7-code");
         Assert.Equal(2, cands.Count);
         Assert.Equal("moonshot", cands[0].Provider.Name);
         Assert.Equal("ollama", cands[1].Provider.Name);
@@ -314,7 +285,7 @@ public class RoutingDiagnosticTests : IDisposable
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(new Dictionary<string, string[]>
             {
-                ["ollama"] = ["deepseek-v4-pro", "kimi-k2.6", "qwen3-coder:480b", "devstral-2:123b"],
+                ["ollama"] = ["deepseek-v4-pro", "kimi-k2.7-code", "gpt-oss:120b", "glm-5.2"],
             },
             ollamaProviders: ["ollama"]);
 
@@ -322,9 +293,9 @@ public class RoutingDiagnosticTests : IDisposable
 
         // Sin deepseek configurado, ollamacloud toma el modelo
         Assert.Equal("ollama", registry.ResolveProvider("deepseek-v4-pro").Name);
-        Assert.Equal("ollama", registry.ResolveProvider("kimi-k2.6").Name);
-        Assert.Equal("ollama", registry.ResolveProvider("qwen3-coder:480b").Name);
-        Assert.Equal("ollama", registry.ResolveProvider("devstral-2:123b").Name);
+        Assert.Equal("ollama", registry.ResolveProvider("kimi-k2.7-code").Name);
+        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss:120b").Name);
+        Assert.Equal("ollama", registry.ResolveProvider("glm-5.2").Name);
     }
 
     // ──────────────────────────────────────────────────────────────────────

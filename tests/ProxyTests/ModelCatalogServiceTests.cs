@@ -11,43 +11,11 @@ namespace ProxyTests;
 [Collection("Proxy")]
 public class ModelCatalogServiceTests : IDisposable
 {
-    // Snapshot of env vars we touch, restored in Dispose so subsequent
-    // tests (in any class) start from a clean slate.
-    private readonly Dictionary<string, string?> _envSnapshot;
+    // Clears every provider env var (and restores them in Dispose) so each test starts
+    // from a known-clean slate regardless of what the developer's .env contains.
+    private readonly ProviderEnvScope _envScope = new();
 
-    public ModelCatalogServiceTests()
-    {
-        // The "Proxy" collection fixture sets PROVIDER_DEEPSEEK_API_KEY and
-        // clears the others. We extend that to clear all provider env vars
-        // so each test starts from a known-clean state.
-        string[] keys =
-        [
-            "PROVIDER_DEEPSEEK_API_KEY", "PROVIDER_DEEPSEEK_BASE_URL",
-            "PROVIDER_OPENAI_API_KEY", "PROVIDER_OPENAI_BASE_URL",
-            "PROVIDER_NVIDIA_API_KEY", "PROVIDER_NVIDIA_BASE_URL",
-            "PROVIDER_OPENROUTER_API_KEY", "PROVIDER_OPENROUTER_BASE_URL",
-            "PROVIDER_GROQ_API_KEY", "PROVIDER_GROQ_BASE_URL",
-            "PROVIDER_OLLAMACLOUD_API_KEY", "PROVIDER_OLLAMA_API_KEY", "PROVIDER_OLLAMA_BASE_URL",
-            "PROVIDER_GOOGLE_API_KEY", "PROVIDER_GOOGLE_BASE_URL",
-            "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
-            "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
-            "DEEPSEEK_MODEL"
-        ];
-        _envSnapshot = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (string k in keys)
-        {
-            _envSnapshot[k] = Environment.GetEnvironmentVariable(k);
-            Environment.SetEnvironmentVariable(k, null);
-        }
-    }
-
-    public void Dispose()
-    {
-        foreach (KeyValuePair<string, string?> kv in _envSnapshot)
-        {
-            Environment.SetEnvironmentVariable(kv.Key, kv.Value);
-        }
-    }
+    public void Dispose() => _envScope.Dispose();
 
     private const string AnyKey = "test-key";
 
@@ -130,12 +98,12 @@ public class ModelCatalogServiceTests : IDisposable
     public async Task Openai_OnlyProvider_ClaimsBareName()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
-            BuildCatalog(new Dictionary<string, string[]> { ["openai"] = ["gpt-5"] });
+            BuildCatalog(new Dictionary<string, string[]> { ["openai"] = ["gpt-5.4"] });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("openai", registry.ResolveProvider("gpt-5").Name);
-        Assert.Equal("openai", registry.ModelToProvider["gpt-5@openai"].Name);
+        Assert.Equal("openai", registry.ResolveProvider("gpt-5.4").Name);
+        Assert.Equal("openai", registry.ModelToProvider["gpt-5.4@openai"].Name);
     }
 
     [Fact]
@@ -215,13 +183,13 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task GptOss120b_OfferedByNvidiaGroqOllama_ClaimsLowestPriority()
     {
-        // Live JSON priorities after the 2026-06-10 curation:
-        //   nvidia.json p4 (match "openai/gpt-oss-120b", upstream "openai/gpt-oss-120b").
-        //   groq.json   p4 (match "openai/gpt-oss-120b", upstream "openai/gpt-oss-120b").
-        //   ollama.json match "gpt-oss" is DISABLED — ollama is no longer a claimant for
-        //   any "gpt-oss-120b" upstream id, so we don't even ask the fake handler for one.
-        // Tie-break: nvidia wins over groq because ProviderRegistry discovery order
-        // (deepseek, openai, nvidia, openrouter, groq, …) places nvidia before groq.
+        // Live JSON priorities:
+        //   groq.json   p2 (match "openai/gpt-oss-120b").
+        //   nvidia.json p4 (match "openai/gpt-oss-120b").
+        //   ollama.json's "gpt-oss:120b" is a different upstream id (colon, not dash),
+        //   so ollama is not a claimant here.
+        // Lower priority number wins outright → groq, which also matches reality:
+        // Groq answers this model in ~2s where NVIDIA regularly needs >60s.
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(
                 new Dictionary<string, string[]>
@@ -233,20 +201,19 @@ public class ModelCatalogServiceTests : IDisposable
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        // Shared upstream: nvidia wins (p4) over groq (p4) via provider discovery order.
-        Assert.Equal("nvidia", registry.ResolveProvider("openai/gpt-oss-120b").Name);
-        Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b"].Name);
+        Assert.Equal("groq", registry.ResolveProvider("openai/gpt-oss-120b").Name);
+        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b"].Name);
 
         // Both claimants get qualified aliases.
         Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b@nvidia"].Name);
         Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b@groq"].Name);
 
-        // Failover: nvidia (p4) first, then groq (p4) — same priority, registry order breaks tie.
+        // Failover: groq (p2) first, then nvidia (p4).
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
             registry.ResolveCandidates("openai/gpt-oss-120b");
         Assert.Equal(2, cands.Count);
-        Assert.Equal("nvidia", cands[0].Provider.Name);
-        Assert.Equal("groq", cands[1].Provider.Name);
+        Assert.Equal("groq", cands[0].Provider.Name);
+        Assert.Equal("nvidia", cands[1].Provider.Name);
 
         // The bare "gpt-oss-120b" (no upstream prefix) is NOT exposed by anyone:
         //   - nvidia's upstream id is "openai/gpt-oss-120b" (not the bare name).
@@ -258,28 +225,29 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task KimiK26_OfferedByMoonshotAndOllama_ClaimsMoonshot()
     {
-        // moonshot.json p1 ("kimi-k2.6"), ollama.json p7 ("kimi").
+        // moonshot.json p1 and ollama.json p1 both claim "kimi-k2.7-code";
+        // the tie is broken by provider discovery order (moonshot before ollama).
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(
                 new Dictionary<string, string[]>
                 {
-                    ["moonshot"] = ["kimi-k2.6"],
-                    ["ollama"] = ["kimi-k2.6"],
+                    ["moonshot"] = ["kimi-k2.7-code"],
+                    ["ollama"] = ["kimi-k2.7-code"],
                 },
                 ollamaProviders: ["ollama"]);
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.6").Name);
+        Assert.Equal("moonshot", registry.ResolveProvider("kimi-k2.7-code").Name);
 
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
-            registry.ResolveCandidates("kimi-k2.6");
+            registry.ResolveCandidates("kimi-k2.7-code");
         Assert.Equal(2, cands.Count);
         Assert.Equal("moonshot", cands[0].Provider.Name);
         Assert.Equal("ollama", cands[1].Provider.Name);
 
-        Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.6@moonshot"].Name);
-        Assert.Equal("ollama", registry.ModelToProvider["kimi-k2.6@ollama"].Name);
+        Assert.Equal("moonshot", registry.ModelToProvider["kimi-k2.7-code@moonshot"].Name);
+        Assert.Equal("ollama", registry.ModelToProvider["kimi-k2.7-code@ollama"].Name);
     }
 
     // ── Exposure gate ────────────────────────────────────────────────────
@@ -412,22 +380,21 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task SamePriority_TieBreaksByConfiguredProviderOrder()
     {
-        // moonshot.json has explicit priority 1 for "kimi-k2.6"; ollama.json
-        // has explicit priority 7 for the substring "kimi". moonshot wins by
-        // priority (lower number), and the failover list is [moonshot, ollama].
+        // Both moonshot.json and ollama.json give "kimi-k2.7-code" priority 1, so the
+        // tie falls through to provider discovery order → [moonshot, ollama].
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(
                 new Dictionary<string, string[]>
                 {
-                    ["moonshot"] = ["kimi-k2.6"],
-                    ["ollama"] = ["kimi-k2.6"],
+                    ["moonshot"] = ["kimi-k2.7-code"],
+                    ["ollama"] = ["kimi-k2.7-code"],
                 },
                 ollamaProviders: ["ollama"]);
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
-            registry.ResolveCandidates("kimi-k2.6");
+            registry.ResolveCandidates("kimi-k2.7-code");
         Assert.Equal(2, cands.Count);
         Assert.Equal("moonshot", cands[0].Provider.Name);
         Assert.Equal("ollama", cands[1].Provider.Name);

@@ -12,6 +12,9 @@ namespace ProxyTests;
 ///      hinted provider whose suffix equals the bare name
 ///      (e.g. "nvidia/qwen3.5-397b-a17b" → "qwen/qwen3.5-397b-a17b", the actual upstream id).
 /// </summary>
+// These tests construct a ProviderRegistry from process env vars, which EndpointTests'
+// ProxyFixture also mutates. Without sharing the collection they race and fail at random.
+[Collection("Proxy")]
 public class ProviderModelHintTests
 {
     // ── Level 1: verbatim match ───────────────────────────────────────────
