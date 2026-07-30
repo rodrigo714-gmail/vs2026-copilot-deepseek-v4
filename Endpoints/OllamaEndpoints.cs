@@ -211,7 +211,7 @@ internal static class OllamaEndpoints
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
                 using StringContent ollamaStreamContent = new(upstreamBody, Encoding.UTF8, "application/json");
-                using HttpRequestMessage ollamaStreamReq = new(HttpMethod.Post, "api/chat") { Content = ollamaStreamContent };
+                using HttpRequestMessage ollamaStreamReq = new(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = ollamaStreamContent };
                 using HttpResponseMessage ollamaStreamResp = await ollamaProvider.Client.SendAsync(
                     ollamaStreamReq, HttpCompletionOption.ResponseHeadersRead, ollamaCt);
                 sw.Stop();
@@ -277,8 +277,22 @@ internal static class OllamaEndpoints
                 // Track usage from the OpenAI-format response
                 RecordOllamaOpenAiUsage(usageTracker, ollamaProvider.Name, respBody, resp.Headers, resp.TrailingHeaders, sw2.ElapsedMilliseconds, ollamaEffectiveModel);
 
-                using JsonDocument odoc = JsonDocument.Parse(respBody);
-                JsonElement msg = odoc.RootElement.GetProperty("choices")[0].GetProperty("message");
+                // A 200 with a body we can't read as an OpenAI completion must not become an
+                // opaque 502 from an unhandled exception — report it with the upstream body.
+                if (!TryExtractAssistantMessage(respBody, out JsonElement msg, out string assistantContent))
+                {
+                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' returned an unparseable completion: '{respBody[..Math.Min(respBody.Length, 500)]}'");
+                    ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
+                    {
+                        error = $"Provider '{ollamaProvider.Name}' returned a response the proxy could not parse as an OpenAI completion.",
+                        upstream_body = respBody[..Math.Min(respBody.Length, 2000)]
+                    }, JsonDefaults.SnakeCase), ct);
+                    usageTracker.RecordError(ollamaProvider.Name, "Unparseable completion", "502", sw2.ElapsedMilliseconds);
+                    return;
+                }
+
                 Dictionary<string, object?> ollamaResp = new()
                 {
                     ["model"] = ollamaEffectiveModel,
@@ -286,12 +300,12 @@ internal static class OllamaEndpoints
                     ["message"] = new Dictionary<string, object?>
                     {
                         ["role"] = "assistant",
-                        ["content"] = msg.GetProperty("content").GetString() ?? ""
+                        ["content"] = assistantContent
                     },
                     ["done"] = true,
                     ["done_reason"] = "stop"
                 };
-                if (msg.TryGetProperty("tool_calls", out JsonElement tcs))
+                if (msg.ValueKind == JsonValueKind.Object && msg.TryGetProperty("tool_calls", out JsonElement tcs))
                     ((Dictionary<string, object?>)ollamaResp["message"]!)["tool_calls"] = tcs;
 
                 ctx.Response.ContentType = "application/json";
@@ -303,7 +317,7 @@ internal static class OllamaEndpoints
                 ctx.Response.ContentType = "application/x-ndjson";
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-                using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "v1/chat/completions")
+                using HttpRequestMessage upstreamReq = new(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath)
                 {
                     Content = reqContent
                 };
@@ -334,6 +348,51 @@ internal static class OllamaEndpoints
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// Extracts <c>choices[0].message</c> from an OpenAI-format completion.
+    /// Reasoning models (DeepSeek, Nemotron, GLM) may leave <c>content</c> empty and put the
+    /// answer in <c>reasoning_content</c>; that text is used as the fallback so BYOM clients
+    /// never see a blank reply. Returns false when the body is not an OpenAI completion at all.
+    /// </summary>
+    private static bool TryExtractAssistantMessage(string responseBody, out JsonElement message, out string content)
+    {
+        message = default;
+        content = string.Empty;
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(responseBody);
+            if (!doc.RootElement.TryGetProperty("choices", out JsonElement choices)
+                || choices.ValueKind != JsonValueKind.Array
+                || choices.GetArrayLength() == 0)
+            {
+                return false;
+            }
+
+            if (!choices[0].TryGetProperty("message", out JsonElement msg) || msg.ValueKind != JsonValueKind.Object)
+                return false;
+
+            // Clone so the element stays valid after the JsonDocument is disposed.
+            message = msg.Clone();
+
+            if (message.TryGetProperty("content", out JsonElement contentEl) && contentEl.ValueKind == JsonValueKind.String)
+                content = contentEl.GetString() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(content)
+                && message.TryGetProperty("reasoning_content", out JsonElement reasoningEl)
+                && reasoningEl.ValueKind == JsonValueKind.String)
+            {
+                content = reasoningEl.GetString() ?? string.Empty;
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

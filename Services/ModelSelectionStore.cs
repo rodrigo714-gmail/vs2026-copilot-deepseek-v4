@@ -81,8 +81,12 @@ internal sealed class ModelSelectionStore
             return null;
         }
 
+        // Specificity beats priority: entries are matched as substrings, so a generic
+        // entry ("gpt-5.4", priority 3) would otherwise shadow the specific one
+        // ("gpt-5.4-mini", priority 5) and hand it the wrong context window.
+        // Longest match first, priority only as a tie-break.
         ModelSelectionEntry[] entries = GetProviderModelSelections(providerName);
-        foreach (ModelSelectionEntry entry in entries.OrderBy(x => x.Priority))
+        foreach (ModelSelectionEntry entry in entries.OrderByDescending(x => x.Match.Length).ThenBy(x => x.Priority))
         {
             if (!entry.Enabled)
             {
@@ -192,7 +196,9 @@ internal sealed class ModelSelectionStore
                                 ReasoningEffort: execE.TryGetProperty("reasoning_effort", out JsonElement reE) && reE.ValueKind == JsonValueKind.String ? reE.GetString() : null,
                                 TimeoutSeconds: execE.TryGetProperty("timeout_seconds", out JsonElement timeoutE) && timeoutE.ValueKind == JsonValueKind.Number ? timeoutE.GetInt32() : null,
                                 OverrideClientParams: execE.TryGetProperty("override_client_params", out JsonElement ovE) && ovE.ValueKind is JsonValueKind.True or JsonValueKind.False && ovE.GetBoolean(),
-                                SupportsReasoning: execE.TryGetProperty("supports_reasoning", out JsonElement srE) && srE.ValueKind is JsonValueKind.True or JsonValueKind.False ? srE.GetBoolean() : null
+                                SupportsReasoning: execE.TryGetProperty("supports_reasoning", out JsonElement srE) && srE.ValueKind is JsonValueKind.True or JsonValueKind.False ? srE.GetBoolean() : null,
+                                UsesMaxCompletionTokens: execE.TryGetProperty("uses_max_completion_tokens", out JsonElement mctE) && mctE.ValueKind is JsonValueKind.True or JsonValueKind.False && mctE.GetBoolean(),
+                                SupportsTemperature: execE.TryGetProperty("supports_temperature", out JsonElement stmpE) && stmpE.ValueKind is JsonValueKind.True or JsonValueKind.False ? stmpE.GetBoolean() : null
                             );
                         }
 
@@ -208,15 +214,29 @@ internal sealed class ModelSelectionStore
                         // "provider": "ollama"). Previously loaded entries are preserved.
                         if (selections.TryGetValue(provider, out ModelSelectionEntry[] existing))
                         {
-                            // Start with existing entries, then add new ones (no duplicate match strings).
-                            HashSet<string> existingMatches = new(existing.Select(e => e.Match), StringComparer.OrdinalIgnoreCase);
-                            List<ModelSelectionEntry> merged = [..existing];
+                            // On a duplicate match string, the more useful entry wins:
+                            // enabled beats disabled, then lower priority beats higher.
+                            // Keeping whichever file happened to load first would silently
+                            // disable models that another file explicitly enables.
+                            List<ModelSelectionEntry> merged = [.. existing];
+                            Dictionary<string, int> byMatch = new(StringComparer.OrdinalIgnoreCase);
+                            for (int i = 0; i < merged.Count; i++)
+                                byMatch.TryAdd(merged[i].Match, i);
+
                             foreach (ModelSelectionEntry entry in entries)
                             {
-                                if (existingMatches.Add(entry.Match))
+                                if (!byMatch.TryGetValue(entry.Match, out int at))
                                 {
+                                    byMatch[entry.Match] = merged.Count;
                                     merged.Add(entry);
+                                    continue;
                                 }
+
+                                ModelSelectionEntry current = merged[at];
+                                bool newWins = (entry.Enabled && !current.Enabled)
+                                    || (entry.Enabled == current.Enabled && entry.Priority < current.Priority);
+                                if (newWins)
+                                    merged[at] = entry;
                             }
                             entries = merged;
                         }

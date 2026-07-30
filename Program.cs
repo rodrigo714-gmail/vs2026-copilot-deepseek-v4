@@ -8,7 +8,7 @@ if (!File.Exists(envPath))
 }
 if (File.Exists(envPath))
 {
-    Console.WriteLine($"📄 Cargando configuración desde: {envPath}");
+    Console.WriteLine($"  Configuration loaded from: {envPath}");
     foreach (string line in File.ReadAllLines(envPath))
     {
         string trimmed = line.Trim();
@@ -48,6 +48,7 @@ builder.Services.AddHostedService<ProviderBenchmarkService>();
 builder.Services.AddHostedService<UsageSnapshotService>();
 
 WebApplication app = builder.Build();
+app.UseUpstreamErrorHandling();
 app.UseOptionalProxyAuthentication(proxyApiKey);
 
 ModelCatalogService modelCatalog = app.Services.GetRequiredService<ModelCatalogService>();
@@ -59,18 +60,22 @@ app.MapUsageEndpoints();
 app.MapDashboardEndpoints();
 app.MapOllamaEndpoints();
 app.MapHealthEndpoints();
-app.MapDashboardEndpoints();
 
-Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
-Console.WriteLine($"║   DeepSeek / Multi-Provider Copilot Proxy (Ultra)               ║");
-Console.WriteLine($"╠══════════════════════════════════════════════════════════════════╣");
-Console.WriteLine($"║  Version: 2026.06.27                                             ║");
-Console.WriteLine($"║  Default: {providerRegistry.DefaultModel,-32}                                  ║");
-Console.WriteLine($"║  Providers: {string.Join(", ", providerRegistry.Providers.Select(pv => pv.Name)),-32}                          ║");
-Console.WriteLine($"║  Models:   {string.Join(", ", modelCatalog.AvailableModels),-32}                          ║");
-Console.WriteLine($"║  URL:     http://localhost:{port}/v1                             ║");
-Console.WriteLine($"║  Auth:    {(string.IsNullOrEmpty(proxyApiKey) ? "open (no key set)" : "required (PROXY_API_KEY)"),-18} ║");
-Console.WriteLine($"╚══════════════════════════════════════════════════════════════════╝");
+// Plain ASCII: the Windows console defaults to codepage 850/437, which mangles
+// box-drawing characters and emoji into noise.
+string[] providerNames = [.. providerRegistry.Providers.Select(pv => pv.Name)];
+Console.WriteLine();
+Console.WriteLine($"  {ProxyVersion.Name} - one Ollama/OpenAI endpoint, many providers");
+Console.WriteLine("  ==============================================================");
+Console.WriteLine($"  Version   : {ProxyVersion.Current}");
+Console.WriteLine($"  Providers : {providerNames.Length} ({string.Join(", ", providerNames)})");
+Console.WriteLine($"  Models    : {modelCatalog.AvailableModels.Length} discovered");
+Console.WriteLine($"  Default   : {providerRegistry.DefaultModel}");
+Console.WriteLine($"  OpenAI API: http://localhost:{port}/v1/chat/completions");
+Console.WriteLine($"  Ollama API: http://localhost:{port}/api/chat   (Visual Studio 2026 BYOM)");
+Console.WriteLine($"  Dashboard : http://localhost:{port}/dashboard");
+Console.WriteLine($"  Auth      : {(string.IsNullOrEmpty(proxyApiKey) ? "open (PROXY_API_KEY not set)" : "required (PROXY_API_KEY)")}");
+Console.WriteLine();
 
 app.Run();
 

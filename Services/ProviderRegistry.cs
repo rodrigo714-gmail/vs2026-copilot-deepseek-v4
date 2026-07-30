@@ -116,6 +116,14 @@ internal sealed class ProviderRegistry
                 string? rebuilt = RebuildQualifiedAlias(cleanModel, effectiveProviderHint);
                 if (rebuilt is not null)
                     return rebuilt;
+
+                // The hint names a provider that does not offer this model. Both lookups
+                // above already searched within that provider, so anything matched from
+                // here on would belong to a *different* provider — and answering a
+                // "OLLAMA - x" pick from, say, NVIDIA is worse than falling back to the
+                // configured default. Stop here.
+                Console.WriteLine($"[ProviderRegistry] Provider hint '{effectiveProviderHint}' does not offer '{cleanModel}' — falling back to default '{DefaultModel}'.");
+                return DefaultModel;
             }
 
             if (_modelToProvider.ContainsKey(cleanModel))
@@ -224,11 +232,27 @@ internal sealed class ProviderRegistry
         return null;
     }
 
-    /// <summary>Removes the tag portion of an Ollama model name (e.g. "model:latest" → "model").</summary>
+    /// <summary>
+    /// Removes the client-facing tag appended by <c>/api/tags</c> (e.g. "model@ollama:latest" → "model@ollama").
+    /// Only the trailing tag is removed: Ollama upstream ids legitimately embed a colon
+    /// ("qwen3-coder:480b", "devstral-2:123b"), so splitting on the *first* colon would
+    /// truncate the model id and route the request to the wrong provider.
+    /// </summary>
     private static string StripTagSuffix(string model)
     {
-        int colonIdx = model.IndexOf(':');
-        return colonIdx > 0 ? model[..colonIdx] : model;
+        int lastColon = model.LastIndexOf(':');
+        if (lastColon <= 0 || lastColon == model.Length - 1)
+            return model;
+
+        // Never strip a colon that belongs to the model id itself — the tag added by
+        // /api/tags always comes after the "@provider" marker when one is present.
+        int at = model.LastIndexOf('@');
+        if (at >= 0)
+            return lastColon > at ? model[..lastColon] : model;
+
+        return model.AsSpan(lastColon + 1).Equals("latest", StringComparison.OrdinalIgnoreCase)
+            ? model[..lastColon]
+            : model;
     }
 
     /// <summary>

@@ -15,11 +15,19 @@ internal sealed class RequestTransformer
     internal string ApplyExecutionDefaults(string rawBody, string model, ProviderCapabilities capabilities = default)
     {
         ModelExecutionConfig exec = _modelCatalogService.GetExecutionConfigForModel(model);
+
+        // OpenAI's GPT-5.x / o-series reject "max_tokens" (they want
+        // "max_completion_tokens") and reject any explicit temperature/top_p.
+        // Both are rewrite rules, so they must run even when the model has no
+        // injectable defaults at all.
+        bool renameMaxTokens = exec.UsesMaxCompletionTokens;
+        bool stripSampling = exec.SupportsTemperature == false;
+
         bool hasAnyDefault = exec.Temperature.HasValue
             || exec.TopP.HasValue
             || exec.MaxTokensPreferred.HasValue
             || !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
-        if (!hasAnyDefault)
+        if (!hasAnyDefault && !renameMaxTokens && !stripSampling)
         {
             return rawBody;
         }
@@ -62,6 +70,13 @@ internal sealed class RequestTransformer
             {
                 if (prop.NameEquals("temperature"))
                 {
+                    // Models that only accept their default temperature get the field dropped.
+                    if (stripSampling)
+                    {
+                        hasTemperature = true;
+                        continue;
+                    }
+
                     if (force && exec.Temperature.HasValue)
                     {
                         writer.WriteNumber("temperature", exec.Temperature.Value);
@@ -74,6 +89,12 @@ internal sealed class RequestTransformer
                 }
                 else if (prop.NameEquals("top_p"))
                 {
+                    if (stripSampling)
+                    {
+                        hasTopP = true;
+                        continue;
+                    }
+
                     if (force && exec.TopP.HasValue)
                     {
                         writer.WriteNumber("top_p", exec.TopP.Value);
@@ -90,6 +111,17 @@ internal sealed class RequestTransformer
                     // skip max_tokens to avoid the "both set" error from Cerebras/Google.
                     if (hasMaxCompletionTokens)
                         continue;
+
+                    // GPT-5.x / o-series: the same value must go out as max_completion_tokens.
+                    if (renameMaxTokens)
+                    {
+                        if (force && exec.MaxTokensPreferred.HasValue)
+                            writer.WriteNumber("max_completion_tokens", exec.MaxTokensPreferred.Value);
+                        else
+                            writer.WriteNumber("max_completion_tokens", ReadTokenCount(prop.Value));
+                        hasMaxCompletionTokens = true;
+                        continue;
+                    }
 
                     if (force && exec.MaxTokensPreferred.HasValue)
                     {
@@ -136,16 +168,16 @@ internal sealed class RequestTransformer
                 }
             }
 
-            if (!hasTemperature && exec.Temperature.HasValue)
+            if (!hasTemperature && exec.Temperature.HasValue && !stripSampling)
                 writer.WriteNumber("temperature", exec.Temperature.Value);
             // Skip top_p injection for native reasoners to avoid temperature+top_p conflict.
-            if (!hasTopP && exec.TopP.HasValue && !isNativeReasoner)
+            if (!hasTopP && exec.TopP.HasValue && !isNativeReasoner && !stripSampling)
                 writer.WriteNumber("top_p", exec.TopP.Value);
-            // Only inject max_tokens if neither max_tokens nor max_completion_tokens is present.
-            // Prefer max_completion_tokens when the client already used it (VS 2026 BYOM).
+            // Only inject a token budget if neither field is present. Models flagged with
+            // uses_max_completion_tokens must never receive "max_tokens".
             if (!hasMaxTokens && !hasMaxCompletionTokens && exec.MaxTokensPreferred.HasValue)
             {
-                if (hasMaxCompletionTokens)
+                if (renameMaxTokens)
                     writer.WriteNumber("max_completion_tokens", exec.MaxTokensPreferred.Value);
                 else
                     writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
@@ -164,6 +196,14 @@ internal sealed class RequestTransformer
             return rawBody;
         }
     }
+
+    /// <summary>Reads a token-count field that clients may send as a number or a numeric string.</summary>
+    private static int ReadTokenCount(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Number => value.GetInt32(),
+        JsonValueKind.String when int.TryParse(value.GetString(), out int parsed) => parsed,
+        _ => 0
+    };
 
     internal string ReplaceModelInRequestBody(string rawBody, string upstreamModel)
     {

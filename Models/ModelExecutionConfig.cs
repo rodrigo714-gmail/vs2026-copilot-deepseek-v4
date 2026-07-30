@@ -10,5 +10,11 @@ public record struct ModelExecutionConfig(
     string? ReasoningEffort = null,
     int? TimeoutSeconds = null,
     bool OverrideClientParams = false,
-    bool? SupportsReasoning = null
+    bool? SupportsReasoning = null,
+    // OpenAI's GPT-5.x and o-series reject "max_tokens" and require
+    // "max_completion_tokens" instead. Set via execution.uses_max_completion_tokens.
+    bool UsesMaxCompletionTokens = false,
+    // Those same models also reject any temperature/top_p other than the default.
+    // null = unspecified (treated as supported). Set via execution.supports_temperature.
+    bool? SupportsTemperature = null
 );
