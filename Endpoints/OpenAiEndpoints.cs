@@ -172,57 +172,71 @@ internal static class OpenAiEndpoints
                     UpstreamFailure failure;
                     long latencyMs;
 
-                    if (candidateProvider.Capabilities.ApiFormat == ApiFormat.Ollama)
+                    try
                     {
-                        var swOllama = System.Diagnostics.Stopwatch.StartNew();
-                        OllamaCandidateResult ollamaResult = await TryHandleOllamaCloudChatCompletion(
-                            ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, requestCt, ct);
-                        swOllama.Stop();
-
-                        if (ollamaResult.Handled)
+                        if (candidateProvider.Capabilities.ApiFormat == ApiFormat.Ollama)
                         {
-                            StampWinningProvider(ctx, candidateProvider, candidateUpstream, i);
-                            providerHealth.RecordSuccess(candidateProvider.Name, effectiveModel);
-                            return;
-                        }
+                            var swOllama = System.Diagnostics.Stopwatch.StartNew();
+                            OllamaCandidateResult ollamaResult = await TryHandleOllamaCloudChatCompletion(
+                                ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, requestCt, ct);
+                            swOllama.Stop();
 
-                        failure = ollamaResult.Failure;
-                        latencyMs = swOllama.ElapsedMilliseconds;
-                        lastStatus = ollamaResult.StatusCode;
-                        lastBody = ollamaResult.ErrorBody;
-                        usageTracker.RecordError(candidateProvider.Name, $"HTTP {ollamaResult.StatusCode}", ollamaResult.StatusCode.ToString(), latencyMs);
+                            if (ollamaResult.Handled)
+                            {
+                                StampWinningProvider(ctx, candidateProvider, candidateUpstream, i);
+                                providerHealth.RecordSuccess(candidateProvider.Name, effectiveModel);
+                                return;
+                            }
+
+                            failure = ollamaResult.Failure;
+                            latencyMs = swOllama.ElapsedMilliseconds;
+                            lastStatus = ollamaResult.StatusCode;
+                            lastBody = ollamaResult.ErrorBody;
+                            usageTracker.RecordError(candidateProvider.Name, $"HTTP {ollamaResult.StatusCode}", ollamaResult.StatusCode.ToString(), latencyMs);
+                        }
+                        else
+                        {
+                            using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
+                            var sw = System.Diagnostics.Stopwatch.StartNew();
+                            using HttpResponseMessage response = await candidateProvider.Client.SendAsync(
+                                new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
+                                requestCt);
+                            sw.Stop();
+
+                            string respBody = await response.Content.ReadAsStringAsync(ct);
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                reasoningCache.CacheReasoningFromResponse(respBody);
+                                StampWinningProvider(ctx, candidateProvider, candidateUpstream, i);
+                                ctx.Response.StatusCode = (int)response.StatusCode;
+                                ctx.Response.ContentType = "application/json";
+                                await ctx.Response.WriteAsync(respBody, ct);
+
+                                RecordUsageFromResponse(usageTracker, candidateProvider.Name, respBody, response.Headers, response.TrailingHeaders, sw.ElapsedMilliseconds, effectiveModel);
+                                providerHealth.RecordSuccess(candidateProvider.Name, effectiveModel);
+                                return;
+                            }
+
+                            failure = UpstreamFailureClassifier.Classify((int)response.StatusCode, CollectResponseHeaders(response), respBody);
+                            latencyMs = sw.ElapsedMilliseconds;
+                            lastStatus = (int)response.StatusCode;
+                            lastBody = respBody;
+
+                            Console.WriteLine($"[OPENAI-ERROR] Provider='{candidateProvider.Name}' Upstream='{candidateUpstream}' HTTP={lastStatus} Kind={failure.Kind} RespBody='{respBody[..Math.Min(respBody.Length, 500)]}' Latency={latencyMs}ms");
+                            usageTracker.RecordError(candidateProvider.Name, $"HTTP {lastStatus}", lastStatus.ToString(), latencyMs);
+                        }
                     }
-                    else
+                    catch (Exception ex) when (ProxyDiagnostics.IsRetryableTransportFailure(ex, ctx, ct))
                     {
-                        using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
-                        var sw = System.Diagnostics.Stopwatch.StartNew();
-                        using HttpResponseMessage response = await candidateProvider.Client.SendAsync(
-                            new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
-                            requestCt);
-                        sw.Stop();
+                        // Connection refused, DNS failure, or nothing back within timeout_seconds.
+                        // That is the same "this provider is unavailable" case failover exists for;
+                        // it used to abort the request with every other candidate untried.
+                        (lastStatus, lastBody) = ProxyDiagnostics.DescribeTransportFailure(ex, candidateProvider, effectiveModel, out failure);
+                        latencyMs = 0;
 
-                        string respBody = await response.Content.ReadAsStringAsync(ct);
-
-                        if (response.IsSuccessStatusCode)
-                        {
-                            reasoningCache.CacheReasoningFromResponse(respBody);
-                            StampWinningProvider(ctx, candidateProvider, candidateUpstream, i);
-                            ctx.Response.StatusCode = (int)response.StatusCode;
-                            ctx.Response.ContentType = "application/json";
-                            await ctx.Response.WriteAsync(respBody, ct);
-
-                            RecordUsageFromResponse(usageTracker, candidateProvider.Name, respBody, response.Headers, response.TrailingHeaders, sw.ElapsedMilliseconds, effectiveModel);
-                            providerHealth.RecordSuccess(candidateProvider.Name, effectiveModel);
-                            return;
-                        }
-
-                        failure = UpstreamFailureClassifier.Classify((int)response.StatusCode, CollectResponseHeaders(response), respBody);
-                        latencyMs = sw.ElapsedMilliseconds;
-                        lastStatus = (int)response.StatusCode;
-                        lastBody = respBody;
-
-                        Console.WriteLine($"[OPENAI-ERROR] Provider='{candidateProvider.Name}' Upstream='{candidateUpstream}' HTTP={lastStatus} Kind={failure.Kind} RespBody='{respBody[..Math.Min(respBody.Length, 500)]}' Latency={latencyMs}ms");
-                        usageTracker.RecordError(candidateProvider.Name, $"HTTP {lastStatus}", lastStatus.ToString(), latencyMs);
+                        Console.WriteLine($"[OPENAI-ERROR] Provider='{candidateProvider.Name}' Upstream='{candidateUpstream}' {ex.GetType().Name}: {ex.Message}");
+                        usageTracker.RecordError(candidateProvider.Name, ex.GetType().Name, lastStatus.ToString(), 0, failure.Kind);
                     }
 
                     providerHealth.RecordFailure(candidateProvider.Name, effectiveModel, failure);
@@ -271,90 +285,111 @@ internal static class OpenAiEndpoints
                 bodyText = requestTransformer.ReplaceModelInRequestBody(bodyText, upstreamModel);
                 bodyText = requestTransformer.ApplyExecutionDefaults(bodyText, effectiveModel, provider.Capabilities);
 
-                if (provider.Capabilities.ApiFormat == ApiFormat.Ollama)
+                try
                 {
-                    OllamaCandidateResult ollamaStream = await HandleOllamaCloudChatCompletion(
-                        ctx, provider, bodyText, effectiveModel, upstreamModel, isStream, i, requestCt, ct);
-
-                    if (ollamaStream.Handled)
+                    if (provider.Capabilities.ApiFormat == ApiFormat.Ollama)
                     {
-                        providerHealth.RecordSuccess(provider.Name, effectiveModel);
-                        return;
+                        OllamaCandidateResult ollamaStream = await HandleOllamaCloudChatCompletion(
+                            ctx, provider, bodyText, effectiveModel, upstreamModel, isStream, i, requestCt, ct);
+
+                        if (ollamaStream.Handled)
+                        {
+                            providerHealth.RecordSuccess(provider.Name, effectiveModel);
+                            return;
+                        }
+
+                        lastStreamStatus = ollamaStream.StatusCode;
+                        lastStreamBody = ollamaStream.ErrorBody;
+                        usageTracker.RecordError(provider.Name, $"HTTP {ollamaStream.StatusCode}", ollamaStream.StatusCode.ToString(), 0);
+                        providerHealth.RecordFailure(provider.Name, effectiveModel, ollamaStream.Failure);
+
+                        if (!UpstreamFailureClassifier.ShouldFailover(ollamaStream.Failure))
+                            break;
+                        if (i < candidates.Count - 1)
+                        {
+                            proxyLogger.LogFailover(provider.Name, effectiveModel, lastStreamStatus, 0);
+                            providerHealth.RecordFailover(provider.Name, candidates[i + 1].Provider.Name,
+                                effectiveModel, lastStreamStatus, ollamaStream.Failure.Kind, 0);
+                        }
+                        continue;
                     }
 
-                    lastStreamStatus = ollamaStream.StatusCode;
-                    lastStreamBody = ollamaStream.ErrorBody;
-                    usageTracker.RecordError(provider.Name, $"HTTP {ollamaStream.StatusCode}", ollamaStream.StatusCode.ToString(), 0);
-                    providerHealth.RecordFailure(provider.Name, effectiveModel, ollamaStream.Failure);
+                    using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
+                    using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath)
+                    {
+                        Content = reqContent,
+                        Version = HttpVersion.Version11,
+                        VersionPolicy = HttpVersionPolicy.RequestVersionExact
+                    };
+                    upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-                    if (!UpstreamFailureClassifier.ShouldFailover(ollamaStream.Failure))
-                        break;
+                    var streamSw = System.Diagnostics.Stopwatch.StartNew();
+                    using HttpResponseMessage upstreamResp = await provider.Client.SendAsync(
+                        upstreamReq, HttpCompletionOption.ResponseHeadersRead, requestCt);
+                    streamSw.Stop();
+
+                    if (!upstreamResp.IsSuccessStatusCode)
+                    {
+                        string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
+                        UpstreamFailure failure = UpstreamFailureClassifier.Classify(
+                            (int)upstreamResp.StatusCode, CollectResponseHeaders(upstreamResp), errBody);
+
+                        Console.WriteLine($"[OPENAI-ERROR-STREAM] Provider='{provider.Name}' Upstream='{upstreamModel}' HTTP={(int)upstreamResp.StatusCode} Kind={failure.Kind} RespBody='{(!string.IsNullOrEmpty(errBody) ? errBody[..Math.Min(errBody.Length, 500)] : "(empty)")}' Latency={streamSw.ElapsedMilliseconds}ms");
+                        usageTracker.RecordError(provider.Name, $"HTTP {(int)upstreamResp.StatusCode}", ((int)upstreamResp.StatusCode).ToString(), streamSw.ElapsedMilliseconds);
+
+                        lastStreamStatus = (int)upstreamResp.StatusCode;
+                        lastStreamBody = errBody;
+                        providerHealth.RecordFailure(provider.Name, effectiveModel, failure);
+
+                        if (!UpstreamFailureClassifier.ShouldFailover(failure))
+                            break;
+                        if (i < candidates.Count - 1)
+                        {
+                            proxyLogger.LogFailover(provider.Name, effectiveModel, lastStreamStatus, streamSw.ElapsedMilliseconds);
+                            providerHealth.RecordFailover(provider.Name, candidates[i + 1].Provider.Name,
+                                effectiveModel, lastStreamStatus, failure.Kind, streamSw.ElapsedMilliseconds);
+                        }
+                        continue;
+                    }
+
+                    // Committed to this provider from here on — the next write puts bytes on the wire.
+                    StampWinningProvider(ctx, provider, upstreamModel, i);
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.ContentType = "text/event-stream";
+                    ctx.Response.Headers.CacheControl = "no-cache";
+                    ctx.Response.Headers["X-Accel-Buffering"] = "no";
+
+                    double streamCost = PricingCatalog.EstimateCostUsd(provider.Name, effectiveModel, 0, 0);
+                    usageTracker.RecordRequest(provider.Name, 0, 0, 0, null, streamSw.ElapsedMilliseconds, streamCost);
+                    var rlHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var h in upstreamResp.Headers)
+                        rlHeaders[h.Key] = string.Join(", ", h.Value);
+                    foreach (var h in upstreamResp.TrailingHeaders)
+                        rlHeaders[h.Key] = string.Join(", ", h.Value);
+                    usageTracker.RecordRateLimitHeaders(provider.Name, rlHeaders);
+                    providerHealth.RecordSuccess(provider.Name, effectiveModel);
+
+                    await chatStreaming.StreamAndCache(upstreamResp, ctx.Response, ct);
+                    return;
+                }
+                catch (Exception ex) when (ProxyDiagnostics.IsRetryableTransportFailure(ex, ctx, ct))
+                {
+                    // Nothing has been written yet, so an unreachable or hung provider is just
+                    // another reason to try the next candidate rather than to fail the request.
+                    (lastStreamStatus, lastStreamBody) =
+                        ProxyDiagnostics.DescribeTransportFailure(ex, provider, effectiveModel, out UpstreamFailure transportFailure);
+
+                    Console.WriteLine($"[OPENAI-ERROR-STREAM] Provider='{provider.Name}' Upstream='{upstreamModel}' {ex.GetType().Name}: {ex.Message}");
+                    usageTracker.RecordError(provider.Name, ex.GetType().Name, lastStreamStatus.ToString(), 0, transportFailure.Kind);
+                    providerHealth.RecordFailure(provider.Name, effectiveModel, transportFailure);
+
                     if (i < candidates.Count - 1)
                     {
                         proxyLogger.LogFailover(provider.Name, effectiveModel, lastStreamStatus, 0);
                         providerHealth.RecordFailover(provider.Name, candidates[i + 1].Provider.Name,
-                            effectiveModel, lastStreamStatus, ollamaStream.Failure.Kind, 0);
+                            effectiveModel, lastStreamStatus, transportFailure.Kind, 0);
                     }
-                    continue;
                 }
-
-                using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
-                using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath)
-                {
-                    Content = reqContent,
-                    Version = HttpVersion.Version11,
-                    VersionPolicy = HttpVersionPolicy.RequestVersionExact
-                };
-                upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-
-                var streamSw = System.Diagnostics.Stopwatch.StartNew();
-                using HttpResponseMessage upstreamResp = await provider.Client.SendAsync(
-                    upstreamReq, HttpCompletionOption.ResponseHeadersRead, requestCt);
-                streamSw.Stop();
-
-                if (!upstreamResp.IsSuccessStatusCode)
-                {
-                    string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
-                    UpstreamFailure failure = UpstreamFailureClassifier.Classify(
-                        (int)upstreamResp.StatusCode, CollectResponseHeaders(upstreamResp), errBody);
-
-                    Console.WriteLine($"[OPENAI-ERROR-STREAM] Provider='{provider.Name}' Upstream='{upstreamModel}' HTTP={(int)upstreamResp.StatusCode} Kind={failure.Kind} RespBody='{(!string.IsNullOrEmpty(errBody) ? errBody[..Math.Min(errBody.Length, 500)] : "(empty)")}' Latency={streamSw.ElapsedMilliseconds}ms");
-                    usageTracker.RecordError(provider.Name, $"HTTP {(int)upstreamResp.StatusCode}", ((int)upstreamResp.StatusCode).ToString(), streamSw.ElapsedMilliseconds);
-
-                    lastStreamStatus = (int)upstreamResp.StatusCode;
-                    lastStreamBody = errBody;
-                    providerHealth.RecordFailure(provider.Name, effectiveModel, failure);
-
-                    if (!UpstreamFailureClassifier.ShouldFailover(failure))
-                        break;
-                    if (i < candidates.Count - 1)
-                    {
-                        proxyLogger.LogFailover(provider.Name, effectiveModel, lastStreamStatus, streamSw.ElapsedMilliseconds);
-                        providerHealth.RecordFailover(provider.Name, candidates[i + 1].Provider.Name,
-                            effectiveModel, lastStreamStatus, failure.Kind, streamSw.ElapsedMilliseconds);
-                    }
-                    continue;
-                }
-
-                // Committed to this provider from here on — the next write puts bytes on the wire.
-                StampWinningProvider(ctx, provider, upstreamModel, i);
-                ctx.Response.StatusCode = 200;
-                ctx.Response.ContentType = "text/event-stream";
-                ctx.Response.Headers.CacheControl = "no-cache";
-                ctx.Response.Headers["X-Accel-Buffering"] = "no";
-
-                double streamCost = PricingCatalog.EstimateCostUsd(provider.Name, effectiveModel, 0, 0);
-                usageTracker.RecordRequest(provider.Name, 0, 0, 0, null, streamSw.ElapsedMilliseconds, streamCost);
-                var rlHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                foreach (var h in upstreamResp.Headers)
-                    rlHeaders[h.Key] = string.Join(", ", h.Value);
-                foreach (var h in upstreamResp.TrailingHeaders)
-                    rlHeaders[h.Key] = string.Join(", ", h.Value);
-                usageTracker.RecordRateLimitHeaders(provider.Name, rlHeaders);
-                providerHealth.RecordSuccess(provider.Name, effectiveModel);
-
-                await chatStreaming.StreamAndCache(upstreamResp, ctx.Response, ct);
-                return;
             }
 
             ctx.Response.StatusCode = lastStreamStatus > 0 ? lastStreamStatus : StatusCodes.Status502BadGateway;
@@ -370,9 +405,23 @@ internal static class OpenAiEndpoints
         return app;
     }
 
+    /// <summary>
+    /// Pins a request to a provider named as a <c>provider/model</c> prefix.
+    /// </summary>
+    /// <remarks>
+    /// An explicit <c>@provider</c> suffix always wins. Without that guard,
+    /// <c>openai/gpt-oss-120b@groq</c> — a real id, since Groq serves a model whose upstream name
+    /// starts with <c>openai/</c> — was pinned to OpenAI, which rejected it as an invalid model.
+    /// The suffix is the unambiguous form the proxy itself publishes in <c>/api/tags</c>, so a
+    /// prefix that merely looks like a provider name must not override it. `ResolveModel` already
+    /// applies the same precedence.
+    /// </remarks>
     private static ProviderInfo? ExtractProviderHint(string? requestedModel, ProviderRegistry providerRegistry)
     {
         if (string.IsNullOrWhiteSpace(requestedModel))
+            return null;
+
+        if (requestedModel.Contains('@'))
             return null;
 
         int slash = requestedModel.IndexOf('/');

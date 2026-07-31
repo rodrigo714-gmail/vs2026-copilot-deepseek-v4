@@ -16,7 +16,7 @@ Optimized documentation for GitHub Copilot, Claude, and other AI code assistants
 - **Reasoning Cache:** DeepSeek multi-turn thinking content reuse
 - **Quota-Aware Failover:** Every chat path walks an ordered candidate list, streaming included. `UpstreamFailureClassifier` splits a transient 429 from an exhausted daily/monthly budget; `ProviderHealthService` stands the provider down for a matching length and demotes it in the routing order (never removes it).
 - **Free-Tier Budgets:** `config/free-tier/catalog.json` + `/api/free-tier/summary` report allowance, spend and remaining budget. Usage persists in `data/usage-rollup.json` so a monthly quota survives a restart.
-- **Production Ready:** HTTP/2, connection pooling, **533-test** suite, zero NuGet dependencies
+- **Production Ready:** HTTP/2, connection pooling, **551-test** suite, zero NuGet dependencies
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated models are selected for coding strength.
 
@@ -285,6 +285,7 @@ JsonElement + defaults
 401 / 403                    → Auth           → 15 min                       → try next
 404 / 410                    → ModelUnavailable → 30 min, THAT MODEL only     → try next
 408 / 5xx                    → Transient      → nothing until 3 in a row     → try next
+no response / conn refused   → Unreachable    → 2 min, escalating to 30 min   → try next
 400 / 413 / 422 (genuine)    → BadRequest     → no cooldown                   → STOP
 
 An upstream Retry-After always wins. A success halves the failure count and clears at zero.
@@ -311,7 +312,7 @@ User sends model = "nvidia/qwen3.5-397b-a17b"
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **JSON parsing:** `System.Text.Json` source-generated (no reflection)
 - **Typical latency:** <10ms proxy overhead
-- **Test count:** 533 tests, all green (1 skipped)
+- **Test count:** 551 tests, all green (1 skipped)
 
 ---
 

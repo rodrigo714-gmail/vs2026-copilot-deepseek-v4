@@ -1,5 +1,7 @@
 {
   "provider": "groq",
+  "_comment": "IMPORTANT — max_tokens must leave room for the prompt. Groq charges prompt + max_tokens against its per-minute token budget, so a max_tokens at or above the TPM limit makes EVERY request fail with HTTP 413 ('Request too large ... tokens per minute (TPM): Limit 8000, Requested 8268') before the model is even reached. That is exactly what happened here: three models shipped with max_tokens 8192 against an 8000 TPM limit and could never answer. Values below leave roughly half the budget for the prompt.",
+  "_tpm_limits_measured_2026_07_31": "Read from x-ratelimit-limit-tokens on the on_demand tier: qwen/qwen3.6-27b 8000, openai/gpt-oss-120b 8000, openai/gpt-oss-20b 8000, llama-3.3-70b-versatile 12000, llama-3.1-8b-instant 6000, groq/compound 70000, groq/compound-mini 70000. These are per-account: re-check yours with `curl -D - -X POST https://api.groq.com/openai/v1/chat/completions -H \"Authorization: Bearer $PROVIDER_GROQ_API_KEY\" -H 'Content-Type: application/json' -d '{\"model\":\"MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}'` and raise max_tokens if you are on a paid tier.",
   "models": [
     {
       "match": "qwen/qwen3.6-27b",
@@ -13,7 +15,7 @@
         "family": "qwen",
         "temperature": 0.2,
         "top_p": 0.95,
-        "max_tokens": 8192,
+        "max_tokens": 4096,
         "timeout_seconds": 60
       }
     },
@@ -29,7 +31,7 @@
         "family": "openai",
         "temperature": 0.2,
         "top_p": 0.9,
-        "max_tokens": 8192,
+        "max_tokens": 4096,
         "timeout_seconds": 90
       }
     },
@@ -62,7 +64,7 @@
         "family": "meta",
         "temperature": 0.3,
         "top_p": 0.9,
-        "max_tokens": 8192,
+        "max_tokens": 6144,
         "timeout_seconds": 60
       }
     },
@@ -79,7 +81,7 @@
         "family": "meta",
         "temperature": 0.3,
         "top_p": 0.9,
-        "max_tokens": 4096,
+        "max_tokens": 2048,
         "timeout_seconds": 45
       }
     },
@@ -95,7 +97,7 @@
         "family": "openai",
         "temperature": 0.2,
         "top_p": 0.9,
-        "max_tokens": 8192,
+        "max_tokens": 4096,
         "timeout_seconds": 60
       }
     },

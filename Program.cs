@@ -1,26 +1,13 @@
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ProxyTests")]
 
-// Cargar .env automáticamente si existe
-string envPath = Path.Combine(AppContext.BaseDirectory, ".env");
-if (!File.Exists(envPath))
+// Load .env if present. A variable already set in the real environment wins — see DotEnvLoader.
+DotEnvLoader.LoadResult dotEnv = DotEnvLoader.LoadFromDefaultLocations();
+if (dotEnv.Path is not null)
 {
-    envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-}
-if (File.Exists(envPath))
-{
-    Console.WriteLine($"  Configuration loaded from: {envPath}");
-    foreach (string line in File.ReadAllLines(envPath))
+    Console.WriteLine($"  Configuration loaded from: {dotEnv.Path}");
+    if (dotEnv.SkippedBecauseAlreadySet.Count > 0)
     {
-        string trimmed = line.Trim();
-        if (trimmed.Length == 0 || trimmed.StartsWith("#"))
-            continue;
-        int eq = trimmed.IndexOf('=');
-        if (eq < 1)
-            continue;
-        string key = trimmed[..eq].Trim();
-        string value = trimmed[(eq + 1)..].Trim().Trim('"');
-        if (!string.IsNullOrEmpty(key))
-            Environment.SetEnvironmentVariable(key, value);
+        Console.WriteLine($"  Ignored in .env (already set in the environment, which wins): {string.Join(", ", dotEnv.SkippedBecauseAlreadySet)}");
     }
 }
 

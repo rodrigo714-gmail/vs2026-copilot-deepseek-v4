@@ -71,6 +71,9 @@ public sealed class FailoverFixture : IDisposable
     internal ScriptedProviderStub OtherThan(string providerName) =>
         providerName.Equals("groq", StringComparison.OrdinalIgnoreCase) ? Nvidia : Groq;
 
+    /// <summary>Makes a provider unreachable until the handle is disposed.</summary>
+    internal IDisposable BreakProvider(string providerName) => StubNamed(providerName).Break();
+
     public void Dispose()
     {
         Client.Dispose();
@@ -375,6 +378,121 @@ public class FailoverTests(FailoverFixture fixture)
         HttpResponseMessage second = await fixture.Client.PostAsync("/api/chat", OllamaBody(stream: false));
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         Assert.Equal(primary, second.Headers.GetValues("X-Proxy-Provider").Single());
+    }
+
+    /// <summary>
+    /// `openai/gpt-oss-120b@groq` is a real id: Groq serves a model whose upstream name starts
+    /// with `openai/`. The `provider/model` prefix used to pin it to OpenAI on the /v1 surface,
+    /// which rejected it as an invalid model — the explicit `@provider` suffix must win.
+    /// </summary>
+    [Fact]
+    public async Task AtProviderSuffix_BeatsALookalikeProviderPrefix()
+    {
+        await fixture.ResetAsync();
+
+        var pinned = new StringContent(
+            $$"""{"model":"{{FailoverFixture.SharedModel}}@groq","messages":[{"role":"user","content":"hi"}],"stream":false}""",
+            Encoding.UTF8, "application/json");
+
+        HttpResponseMessage r = await fixture.Client.PostAsync("/v1/chat/completions", pinned);
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("groq", r.Headers.GetValues("X-Proxy-Provider").Single());
+        Assert.Equal(1, fixture.Groq.ChatAttempts);
+        Assert.Equal(0, fixture.Nvidia.ChatAttempts);
+    }
+
+    // ── Transport failures: unreachable or hung providers ────────────────────
+
+    /// <summary>
+    /// A provider that refuses the connection must not take the whole request down. This used to
+    /// throw straight past the candidate loop into UpstreamErrorMiddleware, which answered 502
+    /// with every other provider untried — the exact failure NVIDIA produced in practice when its
+    /// free tier queued a model past its timeout.
+    /// </summary>
+    [Fact]
+    public async Task UnreachableProvider_FailsOverToTheNextCandidate()
+    {
+        string primary = await DiscoverPrimaryProviderAsync();
+        await fixture.ResetAsync();
+
+        using (fixture.BreakProvider(primary))
+        {
+            HttpResponseMessage r = await fixture.Client.PostAsync("/api/chat", OllamaBody(stream: false));
+
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            Assert.NotEqual(primary, r.Headers.GetValues("X-Proxy-Provider").Single());
+            Assert.Equal(1, fixture.OtherThan(primary).ChatAttempts);
+        }
+    }
+
+    [Fact]
+    public async Task UnreachableProvider_FailsOverOnTheOpenAiSurfaceToo()
+    {
+        string primary = await DiscoverPrimaryProviderAsync();
+        await fixture.ResetAsync();
+
+        using (fixture.BreakProvider(primary))
+        {
+            HttpResponseMessage r = await fixture.Client.PostAsync("/v1/chat/completions", OpenAiBody(stream: false));
+
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            Assert.NotEqual(primary, r.Headers.GetValues("X-Proxy-Provider").Single());
+        }
+    }
+
+    [Fact]
+    public async Task UnreachableProvider_FailsOverWhenStreaming()
+    {
+        string primary = await DiscoverPrimaryProviderAsync();
+        await fixture.ResetAsync();
+
+        using (fixture.BreakProvider(primary))
+        {
+            HttpResponseMessage r = await fixture.Client.PostAsync("/api/chat", OllamaBody(stream: true));
+
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            string body = await r.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("data:", body);
+            Assert.Contains("\"done\":true", body.Split('\n', StringSplitOptions.RemoveEmptyEntries)[^1].Replace(" ", ""));
+        }
+    }
+
+    [Fact]
+    public async Task UnreachableProvider_IsStoodDownForTheNextRequest()
+    {
+        string primary = await DiscoverPrimaryProviderAsync();
+        await fixture.ResetAsync();
+
+        using (fixture.BreakProvider(primary))
+        {
+            await fixture.Client.PostAsync("/api/chat", OllamaBody(stream: false));
+
+            // A provider that hangs costs a full timeout every time it is tried, so unlike a
+            // transient blip it is demoted on the first occurrence.
+            List<System.Text.Json.JsonElement> cooldowns = await ReadCooldownsAsync();
+            Assert.Contains(cooldowns, c =>
+                c.GetProperty("provider").GetString() == primary &&
+                c.GetProperty("kind").GetString() == "Unreachable");
+        }
+    }
+
+    [Fact]
+    public async Task EveryProviderUnreachable_ReportsAnActionableError()
+    {
+        await DiscoverPrimaryProviderAsync();
+        await fixture.ResetAsync();
+
+        using (fixture.BreakProvider("groq"))
+        using (fixture.BreakProvider("nvidia"))
+        {
+            HttpResponseMessage r = await fixture.Client.PostAsync("/api/chat", OllamaBody(stream: false));
+
+            Assert.Equal(HttpStatusCode.BadGateway, r.StatusCode);
+            string body = await r.Content.ReadAsStringAsync();
+            Assert.Contains("UPSTREAM_UNREACHABLE", body);
+            Assert.Contains("\"provider\"", body);
+        }
     }
 
     // ── Other retryable statuses ─────────────────────────────────────────────
