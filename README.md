@@ -22,7 +22,7 @@ Copilot / Cursor / SDKs ──▶ /v1/chat/… ┴──▶ AI Proxy Hub ──�
 | **Framework** | .NET 10, ASP.NET Core minimal APIs (`CreateSlimBuilder`), zero NuGet dependencies |
 | **Default port** | `11434` — the Ollama port, so clients need no reconfiguration |
 | **Providers** | 14 |
-| **Tests** | 551 passing, xUnit + `WebApplicationFactory`, no network required |
+| **Tests** | 557 passing, xUnit + `WebApplicationFactory`, no network required |
 | **Deploy** | `dotnet run`, Docker, or docker-compose |
 
 ## Quick start
@@ -134,7 +134,7 @@ A model appearing in `/v1/models` is not proof you are entitled to it — it can
 script and enable only what actually responds.
 
 ```bash
-dotnet test           # 551 offline tests
+dotnet test           # 557 offline tests
 ```
 
 ## Documentation

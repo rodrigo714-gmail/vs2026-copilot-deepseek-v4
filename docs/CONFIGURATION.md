@@ -142,26 +142,26 @@ config/model-selection/
 ├── moonshot.json       # Moonshot/Kimi models
 ├── cerebras.json       # Cerebras models
 ├── ollamacloud.json    # Ollama Cloud models
-├── ollama.json         # Local Ollama (merged with ollamacloud)
-└── zenmux.json         # ZenMux models
+├── ollama.json         # Ollama Cloud roster (single file for the 'ollama' provider)
+└── zenmux.json         # whole roster disabled 2026-07-31 (HTTP 402 reject_no_credit)
 ```
 
 ### Model Entry Format
 
 ```json
 {
-  "provider": "zenmux",
+  "provider": "ollama",
   "models": [
     {
-      "match": "glm-5.2-free",
-      "priority": 1,
+      "match": "glm-5.2",
+      "priority": 2,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": false,
-        "family": "z-ai",
+        "family": "glm",
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": 16384,
@@ -201,9 +201,8 @@ config/model-selection/
 When `override_client_params: true`, the proxy overwrites client-supplied values for `temperature`, `top_p`, `max_tokens`, and `reasoning_effort` with the configured values.
 
 Currently enabled for:
-- Moonshot `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`
-- Ollama Cloud `kimi2.7-code`, `kimi-k2.6`
-- ZenMux `kimi-k2.7-code-free`, `kimi-k2.6`
+- Moonshot `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `kimi-k2.6` (Kimi K2.x mandates `temperature=1.0`)
+- Ollama Cloud `kimi-k2.7-code` (same rule)
 
 ---
 
@@ -248,7 +247,7 @@ The following table shows which parameters are supported by each provider:
 | DeepSeek | ✅ | ⚠️ omitted w/ reasoning | ❌ | ✅ | ✅ |
 | OpenAI | ✅ | ⚠️ omitted w/ reasoning | ❌ | ✅ (o-series) | ✅ |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ❌ | ✅ |
-| Groq | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Groq | ✅ | ✅ | ✅ | ❌ | ✅ (except `compound`/`compound-mini`) |
 | OpenRouter | ✅ | ✅ | ✅ | ❌ (passthrough) | ✅ |
 | Ollama Cloud | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Moonshot/Kimi | ✅ | ✅ | ❌ | ❌ | ✅ |
@@ -259,7 +258,12 @@ The following table shows which parameters are supported by each provider:
 - `reasoning_effort` is only for DeepSeek and OpenAI o-series. Filtered for all others.
 - `top_k` is removed for DeepSeek, OpenAI, Moonshot/Kimi, and ZenMux.
 - `top_p` is omitted when `reasoning_effort` is set (DeepSeek/OpenAI rule).
-- `tools` are removed for Groq (API quirk).
+- `tools`/`tool_choice` are forwarded to every provider, but **stripped per model** when the
+  model's `execution.supports_tools` is `false`. Groq's `compound`/`compound-mini` are the live
+  case: they run Groq's own server-side tools and answer HTTP 400 to any client tools payload.
+- OpenAI `gpt-5.5` deliberately has **no** `reasoning_effort` default: OpenAI answers 400
+  "Function tools with reasoning_effort are not supported for gpt-5.5" when an agent-mode
+  client sends tools alongside it.
 
 ---
 
@@ -270,14 +274,16 @@ Enabled models by provider:
 | Provider | # Enabled | Models |
 |----------|:---------:|--------|
 | DeepSeek | 2 | deepseek-v4-pro (1M ctx), deepseek-v4-flash (1M ctx) |
-| OpenAI | 5 | gpt-5 (400K), gpt-5-mini (400K), gpt-4.1 (1M), gpt-4o (128K), gpt-oss-120b (131K) |
-| NVIDIA NIM | 5 | qwen3-coder-480b (1M), kimi-k2.6 (262K), nemotron-3-super (1M), gpt-oss-120b (131K), qwen3.5-397b (262K) |
-| Groq | 5 | llama-3.3-70b (131K), qwen3-32b (131K), llama-4-scout (10M), gpt-oss-120b (131K), gpt-oss-20b (131K) |
-| OpenRouter | 7 | qwen3.7-plus (1M), qwen3-coder (1M), nemotron-3-super (1M), nemotron-3-ultra (1M), kimi-k2.7-code (262K), deepseek-v4-pro (1M) |
-| Moonshot/Kimi | 6 | kimi-k2.7-code (262K), kimi-k2.6 (262K), kimi-k2.5 (262K), moonshot-v1-128k (131K), moonshot-v1-auto (131K), moonshot-v1-32k (32K) |
+| OpenAI | 4 | gpt-5.5 (400K), gpt-5.4 (400K), gpt-5.4-mini (200K), o4-mini (200K) |
+| Google | 8 | gemini-3.5-flash (1M), gemini-3.1-pro-preview (2M), gemini-3-pro-preview (2M), gemini-3-flash-preview (1M), gemini-3.1-flash-lite (1M), gemini-2.5-pro (2M), gemini-2.5-flash (1M), gemini-2.5-flash-lite (1M) |
+| NVIDIA NIM | 8 | nemotron-3-super-120b (1M), glm-5.2 (200K), deepseek-v4-pro (1M), gpt-oss-120b (131K), nemotron-3-ultra-550b (128K), minimax-m3 (1M), llama-3.3-nemotron-super-49b (131K), llama-3.3-70b-instruct (128K) |
+| Groq | 7 | qwen3.6-27b (131K), gpt-oss-120b (131K), gpt-oss-20b (131K), llama-3.3-70b-versatile (131K), llama-3.1-8b-instant (131K), compound (131K), compound-mini (131K) |
+| OpenRouter | 10 | claude-sonnet-4.6 (1M), gpt-5.4 (400K), gemini-3.5-flash (1M), deepseek-v4-pro (1M), qwen3.7-plus (1M), qwen3-coder (1M), kimi-k2.7-code (262K), kimi-k2.6 (262K), grok-4.3 (1M), nemotron-3-super-120b (1M) |
+| Moonshot/Kimi | 6 | kimi-k2.7-code (262K), kimi-k2.7-code-highspeed (262K), kimi-k2.6 (262K), moonshot-v1-128k (131K), moonshot-v1-auto (131K), moonshot-v1-32k (32K) |
 | Cerebras | 2 | zai-glm-4.7 (128K), gpt-oss-120b (131K) |
-| Ollama Cloud | 10 | kimi2.7-code (262K), glm-5.2 (1M), minimax-m3 (1M), qwen3-coder:480b (1M), qwen3-coder-next (1M), devstral-2:123b (128K), kimi-k2.6 (262K), deepseek-v4-pro (1M), glm-5.1 (128K), deepseek-v4-flash (128K), nemotron-3-ultra (128K) |
-| ZenMux | 2 (free) | **glm-5.2-free 🆓** (1M), **kimi-k2.7-code-free 🆓** (262K, vision, reasoning) |
+| Z.AI | 5 | glm-5.2 (1M), glm-5.1 (1M), glm-4.7 (131K), glm-4.7-flash (131K, 🆓), glm-4.7-flashx (131K) |
+| Ollama Cloud | 9 | kimi-k2.7-code (262K), glm-5.2 (1M), deepseek-v4-pro (1M), minimax-m3 (1M), nemotron-3-ultra (1M), nemotron-3-super (1M), glm-5.1 (1M), deepseek-v4-flash (1M), gpt-oss:120b (131K) |
+| ZenMux | 0 | *whole roster disabled 2026-07-31 — every model answered HTTP 402 `reject_no_credit`; top up and re-enable in `zenmux.json`* |
 
 ---
 

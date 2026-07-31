@@ -400,19 +400,16 @@ Response:
 ```json
 {
   "status": "ok",
-  "providers": ["deepseek", "openai", "nvidia", "openrouter", "groq", "ollama", "moonshot", "cerebras"],
+  "providers": ["deepseek", "openai", "google", "nvidia", "openrouter", "groq", "ollama", "moonshot", "cerebras", "zai", "zenmux"],
   "availableModels": [
     "deepseek-v4-pro",
     "deepseek-v4-flash",
-    "gpt-5",
-    "qwen/qwen3-coder-480b-a35b-instruct",
-    "kimi-k2.6",
-"zai-glm-4.7",
-    "qwen3-coder:480b",
-    "kimi2.7-code",
+    "gpt-5.5",
+    "kimi-k2.7-code",
+    "zai-glm-4.7",
     "glm-5.2",
     "minimax-m3",
-    "... (up to 9 enabled per provider, ~45 total)"
+    "... (~60 routable ids in total)"
   ],
   "defaultModel": "deepseek-v4-pro"
 }
