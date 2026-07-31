@@ -40,6 +40,7 @@ internal sealed class ScriptedProviderStub : IAsyncDisposable
     private readonly WebApplication _app;
     private readonly ConcurrentQueue<ScriptedResponse> _script = new();
     private int _chatAttempts;
+    private int _broken;
 
     /// <summary>Label baked into successful replies, so a test can tell the stubs apart.</summary>
     internal string Name { get; }
@@ -68,6 +69,15 @@ internal sealed class ScriptedProviderStub : IAsyncDisposable
         _app.MapPost("/v1/chat/completions", async (HttpContext ctx) =>
         {
             Interlocked.Increment(ref _chatAttempts);
+
+            // Simulates an unreachable provider: resetting the connection surfaces to the proxy's
+            // HttpClient as an HttpRequestException, the same shape as a refused connection, a DNS
+            // failure or a dropped upstream.
+            if (Volatile.Read(ref _broken) != 0)
+            {
+                ctx.Abort();
+                return;
+            }
 
             using StreamReader reader = new(ctx.Request.Body);
             string requestBody = await reader.ReadToEndAsync();
@@ -113,11 +123,27 @@ internal sealed class ScriptedProviderStub : IAsyncDisposable
         return this;
     }
 
-    /// <summary>Clears the script and the attempt counter.</summary>
+    /// <summary>
+    /// Makes every chat request reset the connection until the returned handle is disposed, so a
+    /// test can simulate a provider that is unreachable rather than merely erroring.
+    /// </summary>
+    internal IDisposable Break()
+    {
+        Volatile.Write(ref _broken, 1);
+        return new Restore(this);
+    }
+
+    private sealed class Restore(ScriptedProviderStub stub) : IDisposable
+    {
+        public void Dispose() => Volatile.Write(ref stub._broken, 0);
+    }
+
+    /// <summary>Clears the script, the attempt counter and any simulated outage.</summary>
     internal void Reset()
     {
         while (_script.TryDequeue(out _)) { }
         Interlocked.Exchange(ref _chatAttempts, 0);
+        Volatile.Write(ref _broken, 0);
     }
 
     private static string BuildModelsBody(string[] models)

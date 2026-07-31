@@ -3,6 +3,42 @@
 All notable changes to AI Proxy Hub (formerly "Multi-Provider AI Proxy") will be documented in
 this file.
 
+## 2026-07-31 (2) — Fix Groq's unusable roster, .env precedence, and failover on dead providers
+
+Three problems found by running the proxy against real provider keys rather than stubs.
+
+### Fixed
+- **Every Groq request to three models failed before reaching the model.** Groq charges
+  `prompt + max_tokens` against its per-minute token budget, and `qwen/qwen3.6-27b`,
+  `openai/gpt-oss-120b` and `openai/gpt-oss-20b` shipped with `max_tokens: 8192` against a
+  measured 8000 TPM limit — so even a two-word prompt was rejected with HTTP 413. Two more models
+  were fragile for a coding workload. Limits were read from `x-ratelimit-limit-tokens` per model
+  and `max_tokens` now leaves roughly half the budget for the prompt; the reasoning and the
+  re-measurement command are recorded in `groq.json`.
+- **`.env` overrode real environment variables**, inverting the documented precedence. A `.env`
+  baked into an image silently beat `docker run -e`, compose `environment:` and Kubernetes env
+  vars, so a container ignored the configuration it was handed. The file now fills in only what is
+  missing, and logs which keys it skipped — an ignored line in `.env` is the kind of thing that
+  costs an afternoon. Extracted to `Infrastructure/DotEnvLoader.cs` so the rule is testable.
+- **A provider that never answered took the whole request down.** A refused connection, a DNS or
+  TLS failure, or nothing back within `timeout_seconds` threw straight past the candidate loop into
+  `UpstreamErrorMiddleware`, which answered 502/504 with every other provider untried. This was
+  visible with NVIDIA, whose free tier queues some models past their timeout while others answer in
+  three seconds. Transport failures are now the new `UpstreamFailureKind.Unreachable`: the request
+  fails over, and the provider is stood down on the **first** occurrence — unlike a transient blip,
+  a hang costs a full timeout every time it is tried, so the next request routes around it.
+- **The `@provider` suffix was ignored when the model id also looked like `provider/model`.**
+  `openai/gpt-oss-120b@groq` is a real id — Groq serves a model whose upstream name starts with
+  `openai/` — but on the `/v1` surface the prefix pinned it to OpenAI, which rejected it as an
+  invalid model. The explicit suffix now wins, matching what `ResolveModel` already did.
+
+### Notes
+- NVIDIA's variability is upstream queueing on its free tier, not a proxy fault. Measured on
+  2026-07-31: `deepseek-ai/deepseek-v4-pro` 3.5 s, `nvidia/llama-3.3-nemotron-super-49b-v1.5` 44 s,
+  `meta/llama-3.3-70b-instruct` and `openai/gpt-oss-120b` still unanswered past 45 s and 90 s.
+  The cooldown above is what keeps that out of the IDE's way.
+- 533 → 551 tests.
+
 ## 2026-07-31 — Quota-aware failover, free-tier budgets, three new providers
 
 Borrowed the mechanics worth having from the [OmniRoute](https://github.com/diegosouzapw/OmniRoute)

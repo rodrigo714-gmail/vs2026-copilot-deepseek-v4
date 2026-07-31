@@ -27,8 +27,8 @@ The proxy includes a comprehensive test suite covering every component of the ro
 
 ### Test Statistics
 
-- **Total Tests:** 533
-- **Status:** ✅ All passing (533 passed, 1 skipped)
+- **Total Tests:** 551
+- **Status:** ✅ All passing (551 passed, 1 skipped)
 - **Framework:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing`
 - **Coverage Areas:**
   - ✅ Endpoint routing (OpenAI `/v1/*` & Ollama `/api/*` formats)
@@ -226,11 +226,12 @@ The proxy ships with the following test files in `tests/ProxyTests/`:
 | **`ProviderCapabilitiesRegistryTests.cs`** | **~35** | **Guard: every provider declares its fields, prefixes/URLs/display names are unique, paths are relative, exactly one config file declares it** |
 | **`UpstreamFailureClassifierTests.cs`** | **~45** | **Real 429/413 bodies from Groq, Gemini, Cloudflare, OpenAI; `Retry-After` in every documented form** |
 | **`ProviderHealthServiceTests.cs`** | **23** | **Cooldown durations, DST/month boundaries, success decay, ordering never returns empty** |
-| **`FailoverTests.cs`** | **19** | **Two scripted stubs: failover on all four chat paths, 400 burns one candidate, pins never fail over, cooldown skips a dead provider** |
+| **`FailoverTests.cs`** | **25** | **Two scripted stubs: failover on all four chat paths, 400 burns one candidate, pins never fail over, cooldown skips a dead provider** |
 | **`FreeTierCatalogTests.cs`** | **~13** | **Pool dedup, uncapped never summed, signup credits separated, malformed catalog yields no budget** |
 | **`UsageRollupStoreTests.cs`** | **~9** | **Restart survival, atomic write, corrupt-file recovery, retention pruning** |
 | **`DashboardEndpointTests.cs`** | **~6** | **Dashboard served from `wwwroot`, Chart.js local not CDN, quota panels present** |
-| **Total** | **533** | |
+| **`DotEnvLoaderTests.cs`** | **12** | **Precedence: a real environment variable beats `.env`; an empty value never masks one** |
+| **Total** | **551** | |
 
 ---
 

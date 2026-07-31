@@ -37,4 +37,46 @@ internal static class ProxyDiagnostics
 
     internal static string Truncate(string value, int max) =>
         string.IsNullOrEmpty(value) ? string.Empty : value[..Math.Min(value.Length, max)];
+
+    /// <summary>
+    /// Whether an exception thrown while talking to a provider can be answered by trying the next
+    /// candidate.
+    ///
+    /// Two cases must NOT be retried. If the client hung up there is nobody left to answer, and if
+    /// the response has already started bytes are on the wire and committed to that provider.
+    /// Everything else — connection refused, DNS failure, TLS failure, or nothing back within the
+    /// model's <c>timeout_seconds</c> — is exactly the "this provider is unavailable" case that
+    /// failover exists for.
+    /// </summary>
+    internal static bool IsRetryableTransportFailure(Exception ex, HttpContext ctx, CancellationToken clientCt) =>
+        ex is HttpRequestException or OperationCanceledException
+        && !clientCt.IsCancellationRequested
+        && !ctx.Response.HasStarted;
+
+    /// <summary>
+    /// Turns a transport exception into a failure the candidate loop can carry, with an error body
+    /// in the same shape <see cref="UpstreamErrorMiddleware"/> produces so a client sees one
+    /// consistent format whether the walk ended here or there.
+    /// </summary>
+    internal static (int StatusCode, string Body) DescribeTransportFailure(Exception ex, ProviderInfo provider, string model, out UpstreamFailure failure)
+    {
+        bool unreachable = ex is HttpRequestException;
+        failure = unreachable ? UpstreamFailure.Unreachable : UpstreamFailure.TimedOut;
+
+        (int status, string code, string message) = unreachable
+            ? (StatusCodes.Status502BadGateway, "UPSTREAM_UNREACHABLE",
+               $"Could not reach the upstream provider: {ex.Message}")
+            : (StatusCodes.Status504GatewayTimeout, "UPSTREAM_TIMEOUT",
+               "The upstream provider did not respond within the model's configured timeout_seconds.");
+
+        string body = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            error = message,
+            code,
+            provider = provider.Name,
+            model
+        }, JsonDefaults.SnakeCase);
+
+        return (status, body);
+    }
 }

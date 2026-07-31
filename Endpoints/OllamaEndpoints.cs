@@ -200,9 +200,26 @@ internal static class OllamaEndpoints
                 attempts++;
                 proxyLogger.LogRequest(candidate.Name, ollamaEffectiveModel, i + 1, ollamaCandidates.Count);
 
-                OllamaDispatchResult result = await TryDispatchOllamaChat(
-                    ctx, candidate, candidateUpstream, ollamaEffectiveModel, body, isStream, i,
-                    chatStreaming, reasoningCache, requestTransformer, usageTracker, ollamaCt, ct);
+                OllamaDispatchResult result;
+                try
+                {
+                    result = await TryDispatchOllamaChat(
+                        ctx, candidate, candidateUpstream, ollamaEffectiveModel, body, isStream, i,
+                        chatStreaming, reasoningCache, requestTransformer, usageTracker, ollamaCt, ct);
+                }
+                catch (Exception ex) when (ProxyDiagnostics.IsRetryableTransportFailure(ex, ctx, ct))
+                {
+                    // A provider that refuses the connection or never answers must not take the
+                    // whole request down with it — that is the same "this one is unavailable, use
+                    // another" case as an exhausted quota, and it used to surface to the IDE as a
+                    // bare 502/504 with every other provider untried.
+                    (int transportStatus, string transportBody) =
+                        ProxyDiagnostics.DescribeTransportFailure(ex, candidate, ollamaEffectiveModel, out UpstreamFailure transportFailure);
+                    result = new OllamaDispatchResult(DispatchOutcome.FailedRetryable, transportStatus, transportBody, transportFailure, 0);
+
+                    Console.WriteLine($"[ERROR] Provider='{candidate.Name}' Upstream='{candidateUpstream}' {ex.GetType().Name}: {ex.Message}");
+                    usageTracker.RecordError(candidate.Name, ex.GetType().Name, transportStatus.ToString(), 0, transportFailure.Kind);
+                }
 
                 if (result.Outcome == DispatchOutcome.Succeeded)
                 {

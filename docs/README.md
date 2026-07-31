@@ -2,7 +2,7 @@
 
 > The fastest way to run DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Ollama Cloud, Mistral, SiliconFlow and Cloudflare Workers AI models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
 
-**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 533 offline tests
+**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 551 offline tests
 
 A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **14 AI providers**: DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Ollama Cloud, Mistral, SiliconFlow and Cloudflare Workers AI. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
@@ -14,7 +14,7 @@ When a provider throttles you or its free quota runs out, the request hops to th
 | **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
-| **Tests** | **533 tests**, all offline ✅ |
+| **Tests** | **551 tests**, all offline ✅ |
 | **Deploy** | Docker / bare metal |
 
 ## Key Features
@@ -203,7 +203,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 533 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support, failure classification, cooldowns and failover
+- **Test coverage:** 551 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support, failure classification, cooldowns and failover
 
 ## Testing
 

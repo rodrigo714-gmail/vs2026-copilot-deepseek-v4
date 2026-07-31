@@ -54,7 +54,7 @@ The proxy is a high-performance ASP.NET Core minimal API application that bridge
 - **Web Framework:** ASP.NET Core Minimal APIs (`WebApplication.CreateSlimBuilder`)
 - **Serialization:** System.Text.Json
 - **HTTP Client:** `SocketsHttpHandler` with 256 connections/server + HTTP/2 multiplexing
-- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **533 tests** in 21 test files
+- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **551 tests** in 22 test files
 - **Dependencies:** none. The `.csproj` has zero `PackageReference` entries; everything used ships in the shared framework.
 
 ---
@@ -303,6 +303,7 @@ The HTTP status alone does not say what went wrong, so the body is inspected:
 | `401` / `403` | `Auth`, or `QuotaExhausted` when the body says so | yes |
 | `404` / `410` | `ModelUnavailable` (scoped to that model only) | yes |
 | `408` / `5xx` | `Transient` | yes |
+| *no response* — connection refused, DNS/TLS failure, or nothing within `timeout_seconds` | `Unreachable` | yes |
 | `400` / `413` / `422` | `BadRequest` | **no** |
 
 Two rules earn their keep:
@@ -325,6 +326,7 @@ Two rules earn their keep:
 | `RateLimit` | provider | `5s · 2ⁿ`, capped at 5 min |
 | `Auth` | provider | 15 min |
 | `Transient` | provider | nothing until 3 consecutive failures, then 30 s escalating |
+| `Unreachable` | provider | 2 min, escalating to 30 min — **on the first occurrence**, because a hung provider costs a full timeout every time it is tried |
 | `ModelUnavailable` | **(provider, model)** | 30 min, escalating to 24 h |
 
 An upstream `Retry-After` (or an `x-ratelimit-reset-*` header) always wins over anything computed

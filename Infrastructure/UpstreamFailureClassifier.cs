@@ -26,7 +26,15 @@ public enum UpstreamFailureKind
     BadRequest,
 
     /// <summary>This provider does not serve this model (404/410), but another one might.</summary>
-    ModelUnavailable
+    ModelUnavailable,
+
+    /// <summary>
+    /// The provider never answered: a connection failure, or nothing back within the model's
+    /// configured <c>timeout_seconds</c>. Distinct from <see cref="Transient"/> because a
+    /// provider that hangs costs a full timeout every time it is tried, so it earns a stand-down
+    /// on the first occurrence rather than after a burst.
+    /// </summary>
+    Unreachable
 }
 
 /// <summary>Which budget window <see cref="UpstreamFailureKind.QuotaExhausted"/> refers to.</summary>
@@ -53,6 +61,14 @@ internal readonly record struct UpstreamFailure(
     string? MatchedPattern)
 {
     internal static readonly UpstreamFailure Success = new(UpstreamFailureKind.None, 200, null, QuotaPeriod.None, null);
+
+    /// <summary>The provider host could not be reached at all.</summary>
+    internal static readonly UpstreamFailure Unreachable =
+        new(UpstreamFailureKind.Unreachable, StatusCodes.Status502BadGateway, null, QuotaPeriod.None, "transport-failure");
+
+    /// <summary>The provider accepted the connection but did not answer in time.</summary>
+    internal static readonly UpstreamFailure TimedOut =
+        new(UpstreamFailureKind.Unreachable, StatusCodes.Status504GatewayTimeout, null, QuotaPeriod.None, "timeout");
 
     internal bool IsFailure => Kind != UpstreamFailureKind.None;
 }

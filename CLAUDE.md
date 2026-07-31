@@ -18,7 +18,7 @@ solution are all named `ai-proxy-hub`. Older names (`vs2026-copilot-deepseek-v4`
 # Build
 dotnet build
 
-# Run all tests (533 tests, xUnit + WebApplicationFactory, fully offline)
+# Run all tests (551 tests, xUnit + WebApplicationFactory, fully offline)
 dotnet test
 
 # Run specific test suite
@@ -251,6 +251,7 @@ code alone does not say:
 | 401 / 403 | `Auth` (or `QuotaExhausted` if the body says so) | yes |
 | 404 / 410 | `ModelUnavailable` | yes |
 | 408 / 5xx | `Transient` | yes |
+| *no response at all* (connection refused, DNS/TLS failure, or nothing back within `timeout_seconds`) | `Unreachable` | yes |
 | 400 / 413 / 422 | `BadRequest` | **no** |
 
 Two traps the classifier exists to avoid:
@@ -266,7 +267,10 @@ Two traps the classifier exists to avoid:
 
 `Services/ProviderHealthService.cs` then stands the provider down for a length that matches the
 failure: until local midnight for a daily quota, until the 1st for a monthly one, 6h for a spent
-credit balance, exponential seconds for a rate limit, 15 min for bad credentials. An upstream
+credit balance, exponential seconds for a rate limit, 15 min for bad credentials, and 2 min
+escalating to 30 min for a provider that never answered. `Unreachable` is the one kind that cools
+down on the **first** occurrence rather than after a burst — a hung provider costs a full
+`timeout_seconds` every time it is tried, so the next request should route around it. An upstream
 `Retry-After` always wins over anything computed locally. A success **halves** the failure count
 and clears the entry at zero, so a provider that recovered early is not still being punished.
 
@@ -348,7 +352,7 @@ Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
 - Tests that construct a `ProviderRegistry` or otherwise touch process env vars MUST be in `[Collection("Proxy")]` — `ProxyFixture` boots `Program.cs`, which loads the developer's real `.env` into the process, so anything running in parallel with it races
 - Those tests must also use `ProviderEnvScope`, which clears every `PROVIDER_*` variable derived from `ProviderCapabilitiesRegistry` and restores them on dispose. Never hand-write the list: a forgotten provider picks up a real API key from `.env` and quietly changes collision resolution
-- **533 tests** across 21 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
+- **551 tests** across 22 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
 
 ## Credential Separation
 

@@ -22,7 +22,7 @@ Copilot / Cursor / SDKs ──▶ /v1/chat/… ┴──▶ AI Proxy Hub ──�
 | **Framework** | .NET 10, ASP.NET Core minimal APIs (`CreateSlimBuilder`), zero NuGet dependencies |
 | **Default port** | `11434` — the Ollama port, so clients need no reconfiguration |
 | **Providers** | 14 |
-| **Tests** | 533 passing, xUnit + `WebApplicationFactory`, no network required |
+| **Tests** | 551 passing, xUnit + `WebApplicationFactory`, no network required |
 | **Deploy** | `dotnet run`, Docker, or docker-compose |
 
 ## Quick start
@@ -64,7 +64,10 @@ The proxy also reads *why* a provider said no, because the HTTP status alone doe
   provider is stood down until the budget actually resets;
 - a `400`/`413`/`422` is a malformed request, so it is **not** retried against everyone else —
   unless the body reveals it was really a rate limit (Groq reports an over-TPM request as
-  `413`).
+  `413`);
+- a provider that refuses the connection or never answers within its `timeout_seconds` is
+  unreachable, so it is skipped **and** stood down, and the next request routes around it
+  instead of paying the same wait again.
 
 Providers that are cooling down move to the back of the queue, never off it, so a bad hour
 across every free tier still produces an attempt rather than a dead end. A successful response
@@ -131,7 +134,7 @@ A model appearing in `/v1/models` is not proof you are entitled to it — it can
 script and enable only what actually responds.
 
 ```bash
-dotnet test           # 533 offline tests
+dotnet test           # 551 offline tests
 ```
 
 ## Documentation
