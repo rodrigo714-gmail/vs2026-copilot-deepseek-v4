@@ -1,9 +1,25 @@
 internal sealed class ProviderRegistry
 {
+    /// <summary>
+    /// The provider-hint token meaning "whichever provider serves this model, in priority order"
+    /// — the unpinned counterpart to <c>model@groq</c>. Reserved: it is not, and must never be,
+    /// the name of a real provider in <see cref="ProviderCapabilitiesRegistry"/>, or an
+    /// <c>@auto</c> id would resolve to that provider and silently pin what must stay open.
+    /// </summary>
+    internal const string AutoProviderToken = "auto";
+
     private readonly List<ProviderInfo> _providers = [];
     private Dictionary<string, ProviderInfo> _modelToProvider = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _modelToUpstream = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, List<ProviderInfo>> _upstreamToProviders = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <c>"gpt-oss-120b@auto"</c> → every provider serving that model, best first. Keyed separately
+    /// from <see cref="_upstreamToProviders"/> because the same model carries a different upstream
+    /// id per provider (<c>gpt-oss-120b</c>, <c>openai/gpt-oss-120b</c>, <c>gpt-oss:120b</c>), so
+    /// there is no single upstream key these candidates could share.
+    /// </summary>
+    private Dictionary<string, List<(ProviderInfo Provider, string UpstreamModel)>> _autoAliases = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ProviderHealthService? _health;
 
@@ -41,6 +57,16 @@ internal sealed class ProviderRegistry
     internal IReadOnlyDictionary<string, ProviderInfo> ModelToProvider => _modelToProvider;
 
     internal IReadOnlyDictionary<string, string> ModelToUpstream => _modelToUpstream;
+
+    internal IReadOnlyDictionary<string, List<(ProviderInfo Provider, string UpstreamModel)>> AutoAliases => _autoAliases;
+
+    /// <summary>
+    /// Replaces the unpinned alias table. Candidates arrive already ordered by the caller
+    /// (<see cref="ModelCatalogService"/>), which applies the same priority-then-provider-order
+    /// rule the pinned catalog uses for cross-provider collisions.
+    /// </summary>
+    internal void UpdateAutoAliases(Dictionary<string, List<(ProviderInfo Provider, string UpstreamModel)>> aliases) =>
+        _autoAliases = aliases;
 
     internal void UpdateModelMappings(
         Dictionary<string, ProviderInfo> modelToProvider,
@@ -115,6 +141,17 @@ internal sealed class ProviderRegistry
             // If we have a provider hint (from @suffix or display prefix), check the
             // qualified alias FIRST before falling back to the bare key (which may be
             // mapped to a different provider with higher priority).
+            // "@auto" is not a provider — it asks for the fan-out list. When the model has one
+            // registered, hand back the alias; otherwise drop the hint and resolve the bare name
+            // normally, since "any provider" is satisfied by the only provider that offers it.
+            if (string.Equals(effectiveProviderHint, AutoProviderToken, StringComparison.OrdinalIgnoreCase))
+            {
+                string autoAlias = $"{cleanModel}@{AutoProviderToken}";
+                if (_autoAliases.ContainsKey(autoAlias))
+                    return autoAlias;
+                effectiveProviderHint = null;
+            }
+
             if (effectiveProviderHint is not null)
             {
                 string qualifiedAlias = $"{cleanModel}@{effectiveProviderHint}";
@@ -208,6 +245,12 @@ internal sealed class ProviderRegistry
         if (dashIdx > 0)
         {
             string maybeProvider = model[..dashIdx];
+
+            // "AUTO - gpt-oss-120b" is the display form of the unpinned alias. No provider is
+            // named "auto", so without this it would fall through as an unknown prefix.
+            if (string.Equals(maybeProvider, AutoProviderToken, StringComparison.OrdinalIgnoreCase))
+                return (model[(dashIdx + 3)..].Trim(), AutoProviderToken);
+
             ProviderInfo? prov = _providers.FirstOrDefault(p => string.Equals(p.Name, maybeProvider, StringComparison.OrdinalIgnoreCase));
             if (prov is { Name: var providerName })
             {
@@ -321,6 +364,15 @@ internal sealed class ProviderRegistry
     {
         string resolved = ResolveModel(requestedModel);
         string upstream = _modelToUpstream.TryGetValue(resolved, out string? up) ? up : resolved;
+
+        // "model@auto" fans out to every provider serving the model, each with its own upstream
+        // id. Checked before the qualified branch below, which sees only the '@' and would pin
+        // the request to a single provider — the opposite of what this alias asks for.
+        if (_autoAliases.TryGetValue(resolved, out List<(ProviderInfo Provider, string UpstreamModel)>? autoCandidates)
+            && autoCandidates.Count > 0)
+        {
+            return autoCandidates;
+        }
 
         // Explicit "model@provider" alias -> single, exact candidate.
         bool isQualified = resolved.Contains('@');

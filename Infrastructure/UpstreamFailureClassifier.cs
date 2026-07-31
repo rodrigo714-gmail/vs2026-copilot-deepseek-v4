@@ -88,21 +88,26 @@ internal static partial class UpstreamFailureClassifier
 {
     // Patterns are deliberately specific. A bare /quota reached/ would also swallow transient
     // per-minute limits like "request quota reached, retry in 60s" and mark them as day-long.
-    private static readonly (Regex Pattern, QuotaPeriod Period, string Name)[] QuotaPatterns =
+    //
+    // <c>NamesItsWindow</c> records whether the pattern itself proves which window was hit.
+    // /daily.*limit/ does; /quota.*exceed/ does not — it matches any sentence pairing those two
+    // words, including one describing a per-minute throttle. Only the latter kind can be
+    // overruled by <see cref="ShortWindowLimit"/>; see <see cref="MatchQuotaPattern"/>.
+    private static readonly (Regex Pattern, QuotaPeriod Period, string Name, bool NamesItsWindow)[] QuotaPatterns =
     [
-        (DailyLimit(), QuotaPeriod.Daily, "daily-limit"),
-        (MonthlyLimit(), QuotaPeriod.Monthly, "monthly-limit"),
-        (QuotaExceeded(), QuotaPeriod.Daily, "quota-exceeded"),
-        (InsufficientQuota(), QuotaPeriod.Credit, "insufficient-quota"),
-        (CreditsExhausted(), QuotaPeriod.Credit, "credits-exhausted"),
-        (BillingOrPlanCap(), QuotaPeriod.Monthly, "billing-cap"),
+        (DailyLimit(), QuotaPeriod.Daily, "daily-limit", true),
+        (MonthlyLimit(), QuotaPeriod.Monthly, "monthly-limit", true),
+        (QuotaExceeded(), QuotaPeriod.Daily, "quota-exceeded", false),
+        (InsufficientQuota(), QuotaPeriod.Credit, "insufficient-quota", true),
+        (CreditsExhausted(), QuotaPeriod.Credit, "credits-exhausted", true),
+        (BillingOrPlanCap(), QuotaPeriod.Monthly, "billing-cap", false),
         // Cloudflare Workers AI: "you have used up your daily free allocation of 10,000 neurons".
         // Nothing above matches it, so without this the 429 looks transient and the router
         // hammers a budget that only resets at UTC midnight.
-        (CloudflareDailyAllocation(), QuotaPeriod.Daily, "cloudflare-daily-allocation"),
+        (CloudflareDailyAllocation(), QuotaPeriod.Daily, "cloudflare-daily-allocation", true),
         // Google returns a generic RESOURCE_EXHAUSTED when a billing-period quota is consumed.
         // The "reset after" qualifier keeps transient Google throttling out of this bucket.
-        (GoogleResourceExhausted(), QuotaPeriod.Daily, "google-resource-exhausted"),
+        (GoogleResourceExhausted(), QuotaPeriod.Daily, "google-resource-exhausted", true),
     ];
 
     [GeneratedRegex(@"daily.*(limit|quota)|per.?day.*limit", RegexOptions.IgnoreCase)]
@@ -125,6 +130,19 @@ internal static partial class UpstreamFailureClassifier
 
     [GeneratedRegex(@"daily free allocation", RegexOptions.IgnoreCase)]
     private static partial Regex CloudflareDailyAllocation();
+
+    /// <summary>
+    /// A window measured in seconds or minutes — the provider is throttling, not reporting a
+    /// spent budget, however much quota vocabulary surrounds it.
+    ///
+    /// Cerebras is why this exists. It answers an over-TPM request with
+    /// <c>{"message":"Tokens per minute limit exceeded - too many tokens processed.",
+    /// "param":"quota","code":"token_quota_exceeded"}</c>. The word "quota" appears twice, in the
+    /// JSON keys rather than the prose, so <see cref="QuotaExceeded"/> matched and the provider
+    /// was stood down until local midnight over a limit that clears in sixty seconds.
+    /// </summary>
+    [GeneratedRegex(@"per[\s-]?(minute|second)|per[\s-]?min\b|/\s?min\b|\(TPM\)|\(RPM\)|\bTPM\b|\bRPM\b", RegexOptions.IgnoreCase)]
+    private static partial Regex ShortWindowLimit();
 
     [GeneratedRegex(@"resource has been exhausted.*reset after", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex GoogleResourceExhausted();
@@ -223,15 +241,35 @@ internal static partial class UpstreamFailureClassifier
         _ => true
     };
 
+    /// <summary>
+    /// Finds the quota pattern that describes this body, if any.
+    ///
+    /// A clock-based period claimed by a pattern that does not name its own window is dropped when
+    /// the body names a per-minute or per-second one: those two readings lead to stand-downs
+    /// orders of magnitude apart — until midnight versus a few seconds — and the explicit
+    /// statement of the window is the better evidence. Dropping it here lets the caller fall
+    /// through to <see cref="UpstreamFailureKind.RateLimit"/>.
+    ///
+    /// Scanning continues instead of returning, so a vetoed loose match cannot mask a genuine
+    /// one later in the list. Credit balances are never vetoed — a spent balance is not a window
+    /// that rolls over, so "per minute" nearby says nothing about it.
+    /// </summary>
     private static (QuotaPeriod Period, string? Name) MatchQuotaPattern(string? body)
     {
         if (string.IsNullOrEmpty(body))
             return (QuotaPeriod.None, null);
 
-        foreach ((Regex pattern, QuotaPeriod period, string name) in QuotaPatterns)
+        bool shortWindow = ShortWindowLimit().IsMatch(body);
+
+        foreach ((Regex pattern, QuotaPeriod period, string name, bool namesItsWindow) in QuotaPatterns)
         {
-            if (pattern.IsMatch(body))
-                return (period, name);
+            if (!pattern.IsMatch(body))
+                continue;
+
+            if (shortWindow && !namesItsWindow && period is QuotaPeriod.Daily or QuotaPeriod.Monthly)
+                continue;
+
+            return (period, name);
         }
         return (QuotaPeriod.None, null);
     }

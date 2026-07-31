@@ -12,6 +12,7 @@ Comprehensive architecture documentation describing the proxy design, components
 - [Request Lifecycle](#request-lifecycle)
 - [Model Resolution & 3-Level Hint Solver](#model-resolution--3-level-hint-solver)
 - [Qualified Model Aliases (model@provider)](#qualified-model-aliases-modelprovider)
+- [Unpinned Aliases (model@auto)](#unpinned-aliases-modelauto)
 - [Diagnostic Response Headers](#diagnostic-response-headers)
 - [Image Passthrough Support](#image-passthrough-support)
 - [Force-Mode Parameter Override](#force-mode-parameter-override)
@@ -54,7 +55,7 @@ The proxy is a high-performance ASP.NET Core minimal API application that bridge
 - **Web Framework:** ASP.NET Core Minimal APIs (`WebApplication.CreateSlimBuilder`)
 - **Serialization:** System.Text.Json
 - **HTTP Client:** `SocketsHttpHandler` with 256 connections/server + HTTP/2 multiplexing
-- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **557 tests** in 23 test files
+- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **585 tests** in 24 test files
 - **Dependencies:** none. The `.csproj` has zero `PackageReference` entries; everything used ships in the shared framework.
 
 ---
@@ -227,6 +228,42 @@ The `/api/tags` endpoint emits `model` fields in `model@provider:latest` format.
 
 ---
 
+## Unpinned Aliases (model@auto)
+
+Because every id `/api/tags` publishes is pinned, a client that only picks from that list can
+never fail over — the candidate walk resolves to one provider and an upstream 402 or 413 goes
+straight to the IDE. `@auto` is the unpinned counterpart, published alongside the pinned entries
+for every model **two or more** active providers serve:
+
+```
+name : "AUTO - gpt-oss-120b:latest"
+model: "gpt-oss-120b@auto:latest"
+```
+
+**Resolution chain:**
+1. Client sends `{"model": "gpt-oss-120b@auto:latest"}`
+2. `StripTagSuffix(":latest")` → `gpt-oss-120b@auto`
+3. `ResolveModel` sees the reserved `auto` hint and returns the alias unchanged
+4. `ResolveCandidates` consults `_autoAliases` **before** the qualified branch — which would
+   otherwise see the `@` and pin it — and returns the full candidate list
+5. `ResolveRoutePlan` moves any cooling provider to the back
+
+**Why a separate table rather than `_upstreamToProviders`:** the same model has a different
+upstream id at each provider — `gpt-oss-120b` (Cerebras), `openai/gpt-oss-120b` (Groq, NVIDIA),
+`gpt-oss:120b` (Ollama) — so there is no single upstream key those candidates could share. Each
+entry carries its own `(provider, upstreamId)` pair.
+
+`ModelCatalogService.AutoAliasKey` decides what counts as "the same model": drop the vendor
+prefix, fold the Ollama size tag's colon to a dash. Nothing else is stripped, because
+under-grouping merely omits an AUTO entry while over-grouping would route a request to a model
+the user never picked.
+
+Advertised limits are the **floor** across candidates (`Min` context and output, `All` for
+tools/vision). Publishing one provider's 128k when the next caps at 8k is how a request sized
+against the tag list gets rejected the moment it fails over.
+
+---
+
 ## Diagnostic Response Headers
 
 Both endpoints include response headers for debugging:
@@ -348,6 +385,8 @@ as healthy.
 
 An explicit `model@provider` pin resolves to a single candidate, so it is neither reordered nor
 failed over: answering an explicit choice from a different provider is worse than an honest error.
+Clients that want the opposite send `model@auto` instead, which is the only id in `/api/tags` that
+reaches this reordering at all — see [Unpinned Aliases](#unpinned-aliases-modelauto).
 
 ---
 

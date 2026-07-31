@@ -18,7 +18,7 @@ solution are all named `ai-proxy-hub`. Older names (`vs2026-copilot-deepseek-v4`
 # Build
 dotnet build
 
-# Run all tests (557 tests, xUnit + WebApplicationFactory, fully offline)
+# Run all tests (585 tests, xUnit + WebApplicationFactory, fully offline)
 dotnet test
 
 # Run specific test suite
@@ -177,6 +177,39 @@ An `@provider` (or `PROVIDER - `) hint that the named provider cannot satisfy fa
 default model rather than resolving across providers — answering an explicit "OLLAMA - x" pick
 from NVIDIA is worse than an honest fallback.
 
+#### `@auto` — the unpinned alias
+
+Every id above is pinned, so a client that only ever picks from `/api/tags` **can never fail
+over**: an upstream 402 or 413 reaches the IDE as a hard error with thirteen healthy providers
+idle. That is the whole failover machinery sitting unused on the one path that matters.
+
+So `/api/tags` also publishes an unpinned entry per model that **two or more active providers**
+serve:
+
+- `name` — `"AUTO - gpt-oss-120b:latest"`
+- `model` — `"gpt-oss-120b@auto:latest"`
+
+`auto` is a reserved token (`ProviderRegistry.AutoProviderToken`), never a real provider name.
+`ResolveCandidates` checks the alias table *before* the qualified branch, which would otherwise
+see the `@` and pin it to one provider.
+
+The grouping is not a plain name match, because the same model has a different id at each
+provider — `gpt-oss-120b` (Cerebras), `openai/gpt-oss-120b` (Groq, NVIDIA), `gpt-oss:120b`
+(Ollama). `ModelCatalogService.AutoAliasKey` drops the vendor prefix and folds the Ollama size
+tag's colon to a dash, so the candidate list carries **a per-provider upstream id** rather than
+one shared name. It deliberately strips nothing else: under-grouping merely omits an AUTO entry,
+while over-grouping would route a request to a model nobody picked (`…-a12b` and `…-a12b:free`
+stay separate).
+
+The advertised `context_length` / `max_output_tokens` are the **floor** across candidates and
+`supports_tools` their AND — a limit the client sizes against has to hold for whichever candidate
+ends up serving, and advertising one provider's 128k when the next caps at 8k is exactly how a
+request dies on failover.
+
+A single-provider model gets no AUTO entry: it would behave identically to the pinned one and
+only lengthen the dropdown. Pinned entries are unchanged — picking "GROQ - x" still means Groq
+and only Groq.
+
 For the OpenAI-style `provider/model` form, `ResolveModel` tries three strategies in order:
 
 1. **Verbatim** — the full id exists in the registry (e.g. `openai/gpt-oss-120b` is a registered key).
@@ -237,6 +270,14 @@ explicit temperature. Handled with `uses_max_completion_tokens` + `supports_temp
 in `openai.json`. `gpt-5.5-pro` is Responses-API only (`404 This is not a chat model`) and stays
 disabled for Ollama/BYOM clients.
 
+**Cerebras `zai-glm-4.7`** is capped at **8192 tokens for messages and completion combined**, not
+the 128000 the roster used to claim. VS 2026 agent mode believed the published figure, sent 13k of
+context and got `400 context_length_exceeded` on every turn. The cap is per-model rather than
+account-wide — `gpt-oss-120b` on the same key answers a 10084-token request — so verify each entry
+rather than assuming a tier-wide limit. Cerebras publishes no context metadata in `/v1/models`, and
+probing it is awkward because a prompt large enough to exceed the context also exceeds the TPM
+budget, which answers 429 first.
+
 **Z.AI** puts its OpenAI-compatible API under `https://api.z.ai/api/paas/v4` with a *relative*
 chat path (`chat/completions`, no `v1/` prefix). `ProviderHttpClientFactory` appends a trailing
 slash to every base URL, without which `HttpClient` would resolve the relative path against the
@@ -273,6 +314,15 @@ Two traps the classifier exists to avoid:
   literally that is a malformed request and the router would give up with ten providers idle, so a
   4xx carrying rate-limit wording is reclassified as `RateLimit`. A genuinely oversized body still
   fails fast.
+- **A named short window outranks incidental quota vocabulary.** Cerebras answers an over-TPM
+  request with `{"message":"Tokens per minute limit exceeded","param":"quota","code":
+  "token_quota_exceeded"}`. The word "quota" appears twice — in the JSON *keys*, not the prose —
+  so the loose `quota.*exceed` pattern matched and stood Cerebras down until local midnight over
+  a limit that clears in sixty seconds. A pattern that does not name its own window
+  (`quota-exceeded`, `billing-cap`) is now vetoed when the body says "per minute"/"per second"/
+  TPM/RPM. Patterns that *do* name it (`daily-limit`, `monthly-limit`, Cloudflare, Google) are
+  never vetoed, and neither are credit balances — a spent balance is not a window that rolls
+  over, so nearby throttle wording says nothing about it.
 
 `Services/ProviderHealthService.cs` then stands the provider down for a length that matches the
 failure: until local midnight for a daily quota, until the 1st for a monthly one, 6h for a spent
@@ -289,7 +339,10 @@ last-ditch attempt beats a hard error. `ResolveCandidates` stays pure — `Provi
 depends on that, since it specifically wants to probe cooling providers.
 
 Diagnostic headers: `X-Proxy-Provider` and `X-Proxy-Candidate-Index` name the provider that
-actually **served**; `X-Proxy-Attempts` reports how many candidates were burned.
+actually **served**; `X-Proxy-Attempts` reports how many candidates were burned. All three are set
+on success as well as failure — `X-Proxy-Attempts` used to be written only when every candidate
+failed, which left it absent from the response that most needs it: the one that succeeded, but not
+on the first try.
 
 `FailoverTests.cs` covers this end to end against two scriptable stubs
 (`FakeProviders/ScriptedProviderStub.cs`), including that a 400 burns exactly one candidate and a
@@ -361,7 +414,7 @@ Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
 - Tests that construct a `ProviderRegistry` or otherwise touch process env vars MUST be in `[Collection("Proxy")]` — `ProxyFixture` boots `Program.cs`, which loads the developer's real `.env` into the process, so anything running in parallel with it races
 - Those tests must also use `ProviderEnvScope`, which clears every `PROVIDER_*` variable derived from `ProviderCapabilitiesRegistry` and restores them on dispose. Never hand-write the list: a forgotten provider picks up a real API key from `.env` and quietly changes collision resolution
-- **557 tests** across 23 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
+- **585 tests** across 24 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, `@auto` fan-out (`AutoAliasTests.cs`), and Ollama NDJSON streaming
 
 ## Credential Separation
 

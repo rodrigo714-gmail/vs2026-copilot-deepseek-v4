@@ -70,9 +70,72 @@ internal static class OllamaEndpoints
                 .ThenBy(x => x.DisplayModel, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
+            // Unpinned companions to the pinned entries above. Every "PROVIDER - model" id carries
+            // an @provider suffix, which resolves to exactly one candidate — so a client picking
+            // from this list can never fail over, and an upstream 402 or 413 reaches the IDE as a
+            // hard error with ten healthy providers idle. An "AUTO - model" entry resolves to all
+            // of them in priority order instead.
+            //
+            // Only models that two or more active providers serve get one; with a single provider
+            // AUTO would behave identically to the pinned entry.
+            var autoGroups = configuredEnabled
+                .GroupBy(x => ModelCatalogService.AutoAliasKey(x.Model), StringComparer.OrdinalIgnoreCase)
+                .Select(g => new
+                {
+                    Key = g.Key,
+                    Members = g
+                        .GroupBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
+                        .Select(pg => pg.OrderBy(x => x.Priority).ThenBy(x => x.Model.Length).First())
+                        .OrderBy(x => x.Priority)
+                        .ToArray()
+                })
+                .Where(g => g.Members.Length >= 2)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
             return Results.Json(new
             {
-                models = curated.Select(x =>
+                models = autoGroups.Select(g =>
+                {
+                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family)[] profiles =
+                        [.. g.Members.Select(m => modelCatalog.GetModelProfile(m.Model))];
+
+                    // The advertised limits must hold for whichever candidate ends up serving, so
+                    // they are the floor across all of them, not the best on offer. Advertising
+                    // one provider's 128k when the next caps at 8k is precisely how a request
+                    // sized against the tag list gets rejected on failover.
+                    bool vision = profiles.All(p => p.SupportsVision);
+                    int ctx = profiles.Min(p => p.ContextLength);
+                    int maxOut = profiles.Min(p => p.MaxOutputTokens);
+                    bool tools = profiles.All(p => p.SupportsTools);
+
+                    return new
+                    {
+                        name = $"AUTO - {g.Key}" + ":latest",
+                        model = $"{g.Key}@{ProviderRegistry.AutoProviderToken}:latest",
+                        modified_at = DateTime.UtcNow.ToString("o"),
+                        size = 3_826_793_677L,
+                        digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                        details = new
+                        {
+                            parent_model = "",
+                            format = "api",
+                            family = profiles[0].Family,
+                            families = new[] { profiles[0].Family },
+                            parameter_size = "api",
+                            quantization_level = "none"
+                        },
+                        capabilities = vision ? new[] { "completion", "tools", "vision" } : ["completion", "tools"],
+                        context_length = ctx,
+                        max_output_tokens = maxOut,
+                        input_token_limit = ctx,
+                        output_token_limit = maxOut,
+                        supports_tools = tools,
+                        supports_tool_calls = tools,
+                        supports_vision = vision,
+                        supports_images = vision
+                    };
+                }).Concat(curated.Select(x =>
                 {
                     string providerPrefix = x.Provider.ToUpperInvariant();
                     string displayName = $"{providerPrefix} - {x.DisplayModel}";
@@ -109,7 +172,7 @@ internal static class OllamaEndpoints
                         supports_vision = p.SupportsVision,
                         supports_images = p.SupportsVision
                     };
-                }).ToArray()
+                })).ToArray()
             }, JsonDefaults.SnakeCase);
         });
 

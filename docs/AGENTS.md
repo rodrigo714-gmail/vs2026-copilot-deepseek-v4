@@ -7,7 +7,7 @@ Optimized documentation for GitHub Copilot, Claude, and other AI code assistants
 **Multi-Provider AI Proxy** — Single HTTP gateway to DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Ollama Cloud, **Moonshot/Kimi**, **Cerebras**, **Z.AI**, **ZenMux**, and the free-tier trio **Mistral**, **SiliconFlow**, **Cloudflare Workers AI** — 14 in total.
 
 - **Dual API Support:** OpenAI-compatible (`/v1/*`) + Ollama-compatible (`/api/*`)
-- **Smart Routing:** Model names auto-map to providers with intelligent fallback (3-level `provider/model` hint resolution). `/api/tags` now emits qualified aliases (`model@provider:latest`) for correct provider routing.
+- **Smart Routing:** Model names auto-map to providers with intelligent fallback (3-level `provider/model` hint resolution). `/api/tags` emits both a pinned alias (`model@provider:latest`, one exact provider) and, for models served by two or more providers, an unpinned one (`model@auto:latest`) that walks the whole candidate list.
 - **Parameter Filtering:** Adapt requests for each provider's unique capabilities
 - **Override Mode:** `override_client_params: true` force-overrides client values for models with hard requirements (e.g. Moonshot Kimi K2.x mandates `temperature=1.0`)
 - **Diagnostic Response Headers:** Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Provider` for debugging routing
@@ -16,7 +16,7 @@ Optimized documentation for GitHub Copilot, Claude, and other AI code assistants
 - **Reasoning Cache:** DeepSeek multi-turn thinking content reuse
 - **Quota-Aware Failover:** Every chat path walks an ordered candidate list, streaming included. `UpstreamFailureClassifier` splits a transient 429 from an exhausted daily/monthly budget; `ProviderHealthService` stands the provider down for a matching length and demotes it in the routing order (never removes it).
 - **Free-Tier Budgets:** `config/free-tier/catalog.json` + `/api/free-tier/summary` report allowance, spend and remaining budget. Usage persists in `data/usage-rollup.json` so a monthly quota survives a restart.
-- **Production Ready:** HTTP/2, connection pooling, **557-test** suite, zero NuGet dependencies
+- **Production Ready:** HTTP/2, connection pooling, **585-test** suite, zero NuGet dependencies
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated models are selected for coding strength.
 
@@ -298,6 +298,12 @@ no response / conn refused   → Unreachable    → 2 min, escalating to 30 min 
 An upstream Retry-After always wins. A success halves the failure count and clears at zero.
 Order() demotes cooling providers but NEVER returns an empty list.
 A "model@provider" pin is a single candidate: no failover, no reordering.
+A "model@auto" alias is the whole candidate list: this is the only id in /api/tags
+that reaches failover at all, since every other one is provider-pinned.
+
+429 bodies naming a short window ("per minute", TPM/RPM) are RateLimit even when they
+also say "quota" — Cerebras returns {"param":"quota","code":"token_quota_exceeded"}
+for a per-minute throttle, which used to cost a stand-down until midnight.
 ```
 
 ### Provider/Model Hint Resolution (3-level)
@@ -319,7 +325,7 @@ User sends model = "nvidia/qwen3.5-397b-a17b"
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **JSON parsing:** `System.Text.Json` source-generated (no reflection)
 - **Typical latency:** <10ms proxy overhead
-- **Test count:** 557 tests, all green (1 skipped)
+- **Test count:** 585 tests, all green (1 skipped)
 
 ---
 

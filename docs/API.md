@@ -197,7 +197,20 @@ Chat completion endpoint compatible with OpenAI API.
 
 ### GET /api/tags
 
-List available models in Ollama format. The `model` field uses **qualified aliases** (`model@provider:latest`) to ensure requests route to the correct provider.
+List available models in Ollama format. Each model is published in two forms:
+
+| Form | `name` | `model` | Routing |
+|---|---|---|---|
+| **Pinned** | `GROQ - gpt-oss-120b:latest` | `openai/gpt-oss-120b@groq:latest` | Exactly one provider. Never fails over, never reordered around a cooldown. |
+| **Automatic** | `AUTO - gpt-oss-120b:latest` | `gpt-oss-120b@auto:latest` | Every provider serving the model, best first, cooling ones last. |
+
+`auto` is a reserved token, not a provider. An AUTO entry is published only where **two or more**
+configured providers serve the model — with one provider it would behave identically to the pinned
+entry.
+
+Its advertised `context_length`, `max_output_tokens` and `supports_tools` are the **floor** across
+its candidates, not the best on offer: a limit the client sizes a request against must hold for
+whichever candidate ends up answering it.
 
 **Request:**
 ```bash
@@ -233,7 +246,9 @@ curl http://localhost:11434/api/tags
 }
 ```
 
-**Important:** The `model` field uses `model@provider:latest` format. When sending this model back via POST, the provider-qualified form ensures correct routing to the specific provider instead of falling back to the default provider.
+**Important:** Send the `model` field back verbatim. `model@provider:latest` routes to that exact
+provider instead of falling back to the default; `model@auto:latest` routes to the whole candidate
+list in order. A bare model name still resolves, but to the lowest-priority claimant only.
 
 ### POST /api/chat
 
