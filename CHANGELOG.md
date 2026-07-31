@@ -3,6 +3,88 @@
 All notable changes to AI Proxy Hub (formerly "Multi-Provider AI Proxy") will be documented in
 this file.
 
+## 2026-07-31 — Quota-aware failover, free-tier budgets, three new providers
+
+Borrowed the mechanics worth having from the [OmniRoute](https://github.com/diegosouzapw/OmniRoute)
+gateway: splitting a transient 429 from an exhausted budget, cooldowns whose length matches the
+failure, and honest free-tier accounting (shared pools counted once, rate-limit-only tiers listed
+but never summed).
+
+### Fixed
+- **`/api/chat` had no failover at all.** The Visual Studio 2026 BYOM path called
+  `ResolveProvider()` and committed to a single provider, so an exhausted quota or a dead key
+  surfaced to the IDE as a hard failure with ten other providers sitting idle. It now walks the
+  candidate list, streaming and non-streaming alike.
+- **Streaming could never fail over.** `HandleOllamaCloudChatCompletion` flushed the response body
+  *before* issuing the upstream request — sync-over-async on a request thread, and it committed the
+  response to a provider that had not answered yet. Moved below the success check; streaming
+  failover turned out to be a reordering, not a rewrite.
+- **A 400 burned every candidate.** Retry was triggered by any non-2xx, so a malformed request was
+  re-sent to all eleven providers and returned the same error several seconds later.
+- **Groq's over-TPM 413 was read as a malformed request.** Groq answers an over-quota request with
+  `413 Payload Too Large` and `"code":"rate_limit_exceeded"`; taken literally the router gave up.
+  A 4xx carrying rate-limit wording is now classified as a rate limit and fails over. Found by
+  running the proxy against real provider keys, not by a test.
+- **`TryHandleOllamaCloudChatCompletion` discarded the upstream status and body.** When an
+  Ollama-format provider was the only candidate the client received
+  `502 {"error":"no provider candidate available"}` — actively misleading, since a candidate did
+  exist and did answer. Every path now reports the last real upstream status and body.
+- **Z.AI requests were costed at $0.** `PricingCalculator._providerDefaults` was a second, parallel
+  price table that never knew about `zai`, so the dashboard under-reported spend. Folded into
+  `PricingCatalog`; a test now fails if any registered provider lacks a price fallback.
+- **Two copies of `FormatDisplayName` had drifted apart** (neither knew `zai`), and
+  `ProviderBillingService` returned `null` for any provider missing from its switch. All three
+  per-provider switches now read from `ProviderCapabilitiesRegistry`.
+- **`ProviderRegistryTests` was not isolated.** It hand-rolled a four-key env snapshot instead of
+  using `ProviderEnvScope`, so any other provider key in the developer's `.env` silently changed
+  cross-provider collision resolution underneath its assertions.
+- **Docker lost all usage on every recreation.** The image now creates `/app/data` for the non-root
+  user and declares a volume; `docker-compose.yml` mounts one.
+
+### Added
+- **Quota-aware failover.** `Infrastructure/UpstreamFailureClassifier.cs` decides what a failure
+  *means*: a bare 429 is a throttle worth seconds, a 429 whose body names a daily or monthly limit
+  is an exhausted budget. A bare 429 is never promoted — standing a healthy provider down until
+  midnight over a one-minute blip is worse than one retry.
+- **Provider cooldowns.** `Services/ProviderHealthService.cs` stands a provider down for a length
+  that matches the failure (until local midnight for a daily quota, until the 1st for a monthly
+  one, 6 h for spent credits, exponential seconds for a rate limit, 15 min for bad credentials). An
+  upstream `Retry-After` always wins. A success **halves** the failure count, so a provider that
+  recovers early stops being penalised. Ordering demotes cooling providers but never returns an
+  empty candidate list.
+- **Free-tier budget catalog** — `config/free-tier/catalog.json`: published allowance, RPM/RPD
+  limits, signup URL and a terms-of-service verdict per provider. Data, not C#, so a figure can be
+  re-verified without a rebuild.
+- **Persistent usage** — `data/usage-rollup.json`, a per-day per-provider aggregate flushed every
+  60 s and on shutdown, so a *monthly* quota still means something after a restart. Atomic writes,
+  400-day retention; an unwritable directory degrades to memory-only rather than failing startup.
+- **New endpoints:** `GET /api/free-tier/summary`, `GET /api/resilience/cooldowns`,
+  `POST /api/resilience/reset`.
+- **Three free-tier providers:** Mistral, SiliconFlow and Cloudflare Workers AI. All models ship
+  `"enabled": false` — a model listed by `/v1/models` is not proof of entitlement.
+- **New response headers:** `X-Proxy-Candidate-Index` and `X-Proxy-Attempts`. `X-Proxy-Provider`
+  now names the provider that *served* the request rather than the one tried first.
+- **163 new tests** (370 → 533), including a scriptable two-provider stub
+  (`FakeProviders/ScriptedProviderStub.cs`) that made failover testable at all — `ProxyFixture`
+  boots one stub that always succeeds and cannot express these scenarios.
+
+### Changed
+- Dashboard markup moved from a ~770-line C# verbatim string to `wwwroot/dashboard.html`, with
+  Chart.js vendored locally — it used to load from a CDN, so the page broke with no internet.
+  New panels: free-tier budget, active cooldowns, recent failovers.
+- With `PROXY_API_KEY` set, `/dashboard`, `/vendor/` and `/health` are reachable without a token
+  (a browser cannot attach a bearer token to a navigation); the data endpoints are not. Disable
+  with `PROXY_DASHBOARD_PUBLIC=false`.
+- `ResolveCandidates` stays pure; health-aware routing lives in the new `ResolveRoutePlan`, because
+  `ProviderBenchmarkService` depends on being able to probe cooling providers.
+- Still **zero NuGet dependencies**. The rollup is a JSON file rather than SQLite: a few thousand
+  rows with a single writer does not justify the project's first native dependency.
+
+### Known issues
+- **`groq.json` sets `max_tokens: 8192` while the Groq free tier allows 8000 TPM**, so every
+  request to `openai/gpt-oss-120b` on that tier fails with a 413 before the model is even reached.
+  Lower it to ~6000 if you are on the free tier.
+
 ## 2026-07-30 — Rename to AI Proxy Hub, fix Ollama streaming, verify all 11 providers live
 
 ### Fixed

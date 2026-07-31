@@ -27,8 +27,8 @@ The proxy includes a comprehensive test suite covering every component of the ro
 
 ### Test Statistics
 
-- **Total Tests:** 336
-- **Status:** ✅ All passing (336/336)
+- **Total Tests:** 533
+- **Status:** ✅ All passing (533 passed, 1 skipped)
 - **Framework:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing`
 - **Coverage Areas:**
   - ✅ Endpoint routing (OpenAI `/v1/*` & Ollama `/api/*` formats)
@@ -45,8 +45,14 @@ The proxy includes a comprehensive test suite covering every component of the ro
   - ✅ Provider HTTP client factory
   - ✅ Model selection store
   - ✅ Reasoning cache service
-  - ✅ **`override_client_params` force-mode semantics** (new)
-  - ✅ **3-level `provider/model` hint resolution** (new)
+  - ✅ **`override_client_params` force-mode semantics**
+  - ✅ **3-level `provider/model` hint resolution**
+  - ✅ **Upstream failure classification** — rate limit vs exhausted quota, `Retry-After` parsing
+  - ✅ **Provider cooldowns** — midnight/month boundaries, backoff caps, success decay (fake clock, no sleeping)
+  - ✅ **Failover across all four chat paths** — including that a 400 burns exactly one candidate
+  - ✅ **Free-tier accounting** — pool dedup, uncapped excluded, signup credits separated
+  - ✅ **Usage rollup persistence** — round-trip, corrupt file recovery, month boundaries
+  - ✅ **Dashboard + auth carve-out** — page public, data endpoints protected
 
 ### Test Technologies
 
@@ -214,9 +220,17 @@ The proxy ships with the following test files in `tests/ProxyTests/`:
 | `ReasoningCacheServiceTests.cs` | ~17 | Multi-turn reasoning content cache |
 | `OllamaResponseBuilderTests.cs` | ~15 | Format conversion OpenAI ↔ Ollama |
 | `ProviderHttpClientFactoryTests.cs` | ~8 | Per-provider `HttpClient` config (auth headers, base URL, fallbacks) |
-| `ProxyAuthenticationMiddlewareTests.cs` | ~8 | `PROXY_API_KEY` bearer-token middleware |
+| `ProxyAuthenticationMiddlewareTests.cs` | ~19 | `PROXY_API_KEY` bearer token + the dashboard carve-out (page public, data endpoints protected, no prefix leaks) |
 | `JsonDefaultsTests.cs` | ~9 | `System.Text.Json` snake_case + null handling |
-| **Total** | **336** | |
+| `PricingCatalogTests.cs` | ~15 | Price lookup, provider fallbacks, and the guard that every registered provider has one |
+| **`ProviderCapabilitiesRegistryTests.cs`** | **~35** | **Guard: every provider declares its fields, prefixes/URLs/display names are unique, paths are relative, exactly one config file declares it** |
+| **`UpstreamFailureClassifierTests.cs`** | **~45** | **Real 429/413 bodies from Groq, Gemini, Cloudflare, OpenAI; `Retry-After` in every documented form** |
+| **`ProviderHealthServiceTests.cs`** | **23** | **Cooldown durations, DST/month boundaries, success decay, ordering never returns empty** |
+| **`FailoverTests.cs`** | **19** | **Two scripted stubs: failover on all four chat paths, 400 burns one candidate, pins never fail over, cooldown skips a dead provider** |
+| **`FreeTierCatalogTests.cs`** | **~13** | **Pool dedup, uncapped never summed, signup credits separated, malformed catalog yields no budget** |
+| **`UsageRollupStoreTests.cs`** | **~9** | **Restart survival, atomic write, corrupt-file recovery, retention pruning** |
+| **`DashboardEndpointTests.cs`** | **~6** | **Dashboard served from `wwwroot`, Chart.js local not CDN, quota panels present** |
+| **Total** | **533** | |
 
 ---
 
@@ -345,7 +359,24 @@ public class MyTests
 }
 ```
 
-Tests in the same collection share one fixture. Tests that mutate process env vars (e.g. `ModelCatalogServiceTests`, `ModelSelectionStoreTests`) MUST be in the `Proxy` collection so they don't race with the fixture's env-var setup.
+Tests in the same collection share one fixture. Tests that mutate process env vars (e.g. `ModelCatalogServiceTests`, `ModelSelectionStoreTests`, `ProviderRegistryTests`) MUST be in the `Proxy` collection so they don't race with the fixture's env-var setup — **and must use `ProviderEnvScope`**, never a hand-written list of variables. `ProviderEnvScope` derives its list from `ProviderCapabilitiesRegistry.KnownProviders`, so it picks up new providers automatically; a hand-rolled snapshot silently leaves the new ones set, and a real key from the developer's `.env` then changes cross-provider collision resolution underneath the assertions.
+
+### The failover fixture
+
+`FailoverTests` cannot use `ProxyFixture`: that boots a single stub that always answers 200, and `FakeProviderHandler` only serves model catalogs, never `/v1/chat/completions`. So there is a second fixture:
+
+- **`FakeProviders/ScriptedProviderStub.cs`** — an in-process Kestrel stub on port 0 with a queue of scripted `(status, body, headers)` replies and a `ChatAttempts` counter, so a test can assert *how many* candidates were burned. An empty queue falls back to success.
+- **`FailoverFixture`** boots two of them as `groq` and `nvidia`, which both declare `openai/gpt-oss-120b` in their config, so `ResolveCandidates` returns two candidates.
+
+It lives in its own `[Collection("Failover")]` rather than extending `ProxyFixture`, because adding a second provider there would change `X-Proxy-Candidate-Count`, `/v1/models` and collision resolution across the whole existing suite. This is safe because `xunit.runner.json` sets `"parallelizeTestCollections": false` — collections run one at a time, so two fixtures that both boot `Program.cs` never race on `PROVIDER_*`.
+
+Cooldown state is a process-wide singleton, so every failover test starts with `await fixture.ResetAsync()`, which clears the stub scripts **and** posts to `/api/resilience/reset`. Without it, a 429 recorded by one test would reorder candidates in the next and make the suite order-dependent.
+
+### Time-dependent tests never sleep
+
+`ProviderHealthService` and `UsageRollupStore` both take an injectable `Func<DateTimeOffset>`. That is what lets `ProviderHealthServiceTests` cross midnight, a month boundary and a DST change in milliseconds, and lets `UsageRollupStoreTests` assert that July usage does not leak into August.
+
+`UsageRollupStoreTests` also writes to a fresh temp directory per test — a test that wrote the developer's real rollup would silently corrupt their quota figures.
 
 ### Env-Var Snapshot
 

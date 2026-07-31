@@ -7,8 +7,22 @@ services:
       - "${PROXY_PORT:-11434}:${PROXY_PORT:-11434}"
     env_file:
       - .env
+    volumes:
+      # Keeps data/usage-rollup.json across container recreations. Without it every
+      # `docker compose up --force-recreate` resets the month-to-date token counters and the
+      # free-tier budget page starts again from zero.
+      - ai-proxy-hub-data:/app/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PROXY_PORT:-11434}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     # deploy:
     #   resources:
     #     limits:
     #       memory: 256M
+
+volumes:
+  ai-proxy-hub-data:

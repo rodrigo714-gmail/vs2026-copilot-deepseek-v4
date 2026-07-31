@@ -35,10 +35,60 @@ public sealed class PricingCatalogTests
     }
 
     [Fact]
-    public void UnknownModel_ReturnsNull()
+    public void UnknownModel_OnKnownProvider_FallsBackToProviderDefault()
     {
+        // Used to assert null. Every registered provider now carries a `provider:*` fallback
+        // (folded in from the old PricingCalculator._providerDefaults), so an unlisted model
+        // is priced at its provider's default instead of silently costing nothing. Previously
+        // only `cerebras` behaved this way — see ProviderDefault_FallbackWorks.
         var p = PricingCatalog.Get("deepseek", "nonexistent-model-v99");
+        Assert.NotNull(p);
+        Assert.Equal("deepseek", p.Value.Provider);
+        Assert.Equal(1.00m, p.Value.InputPerMillion);
+        Assert.Equal(4.00m, p.Value.OutputPerMillion);
+    }
+
+    [Fact]
+    public void UnknownProvider_AndUnknownModel_ReturnsNull()
+    {
+        var p = PricingCatalog.Get("no-such-provider", "no-such-model-v99");
         Assert.Null(p);
+    }
+
+    /// <summary>
+    /// The regression guard for the bug this catalog fold fixed: `zai` was missing from the
+    /// old per-provider price table, so every Z.AI request was costed at $0 and the dashboard
+    /// under-reported spend. A provider added to the registry without a price would do the
+    /// same silently — this test makes that a build failure instead.
+    /// </summary>
+    [Fact]
+    public void EveryRegisteredProvider_HasAPriceFallback()
+    {
+        foreach (string provider in ProviderCapabilitiesRegistry.KnownProviders)
+        {
+            var p = PricingCatalog.Get(provider, "some-model-that-is-definitely-not-registered");
+            Assert.True(p is not null, $"Provider '{provider}' has no pricing fallback — its usage would be costed at $0.");
+        }
+    }
+
+    [Fact]
+    public void EstimateCostUsd_UsesProviderFallback_ForZai()
+    {
+        // 1M prompt + 1M completion against the zai default (0.60 / 2.20).
+        double cost = PricingCatalog.EstimateCostUsd("zai", "glm-unlisted-model", 1_000_000, 1_000_000);
+        Assert.Equal(2.80, cost, precision: 6);
+    }
+
+    [Fact]
+    public void EstimateCostUsd_ReturnsZero_ForFreeTierModel()
+    {
+        Assert.Equal(0, PricingCatalog.EstimateCostUsd("zai", "glm-4.7-flash", 1_000_000, 500_000));
+    }
+
+    [Fact]
+    public void EstimateCostUsd_ReturnsZero_ForUnknownProvider()
+    {
+        Assert.Equal(0, PricingCatalog.EstimateCostUsd("no-such-provider", "no-such-model", 1_000_000, 1_000_000));
     }
 
     [Fact]

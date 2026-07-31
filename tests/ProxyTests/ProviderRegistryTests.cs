@@ -2,36 +2,31 @@ using System.Text.Json;
 
 namespace ProxyTests;
 
+/// <summary>
+/// These tests construct a real <see cref="ProviderRegistry"/>, which reads process environment
+/// variables at construction time — so they must be in the "Proxy" collection and must use
+/// <see cref="ProviderEnvScope"/>.
+///
+/// They previously did neither: the class hand-rolled a four-key snapshot covering only
+/// DeepSeek. That happened to pass because DeepSeek was the only key it touched, but any other
+/// provider key present in the developer's .env (loaded into the process by Program.cs via
+/// ProxyFixture) was left set, so those providers were discovered too and cross-provider
+/// collision resolution shifted underneath the assertions. ProviderEnvScope derives its list
+/// from ProviderCapabilitiesRegistry.KnownProviders, so it cannot rot as providers are added.
+/// </summary>
+[Collection("Proxy")]
 public class ProviderRegistryTests : IDisposable
 {
-    private readonly Dictionary<string, string?> _envSnapshot = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ProviderEnvScope _envScope = new();
 
     public ProviderRegistryTests()
     {
-        // Snapshot env vars we may change, then set a minimal env so ProviderRegistry
-        // discovers at least one provider (deepseek).
-        string[] keys = ["PROVIDER_DEEPSEEK_API_KEY", "PROVIDER_DEEPSEEK_BASE_URL", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"];
-        foreach (string k in keys)
-        {
-            _envSnapshot[k] = Environment.GetEnvironmentVariable(k);
-        }
+        // ProviderEnvScope has already cleared every PROVIDER_* variable. Set the single key
+        // these tests rely on, so exactly one provider (deepseek) is discovered.
         Environment.SetEnvironmentVariable("PROVIDER_DEEPSEEK_API_KEY", "test-key");
-        // Clear backward-compat fallback key so it doesn't interfere.
-        Environment.SetEnvironmentVariable("DEEPSEEK_API_KEY", null);
-        // Ensure no default base URL env var is set that would point to a real endpoint
-        Environment.SetEnvironmentVariable("PROVIDER_DEEPSEEK_BASE_URL", null);
     }
 
-    public void Dispose()
-    {
-        foreach (KeyValuePair<string, string?> kv in _envSnapshot)
-        {
-            if (kv.Value is null)
-                Environment.SetEnvironmentVariable(kv.Key, null);
-            else
-                Environment.SetEnvironmentVariable(kv.Key, kv.Value);
-        }
-    }
+    public void Dispose() => _envScope.Dispose();
 
     [Fact]
     public void ResolveProvider_WithNullModel_ReturnsDefaultProvider()

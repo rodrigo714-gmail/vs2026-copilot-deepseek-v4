@@ -11,6 +11,8 @@ Complete configuration documentation for the multi-provider proxy supporting Dee
 - [Diagnostic Response Headers](#diagnostic-response-headers)
 - [Parameter Mapping](#parameter-mapping)
 - [Context Window Specifications](#context-window-specifications)
+- [Free-Tier Catalog](#free-tier-catalog-configfree-tiercatalogjson)
+- [Persistent Usage](#persistent-usage-datausage-rollupjson)
 - [Advanced Configuration](#advanced-configuration)
 
 ---
@@ -19,13 +21,20 @@ Complete configuration documentation for the multi-provider proxy supporting Dee
 
 ### Required Environment Variables
 
-Provider API keys must be set as environment variables. The proxy reads from:
+Provider API keys must be set as environment variables. The proxy reads from, in order of
+precedence:
 
-1. `.env` file (loaded by `Program.cs` if present in the project root)
-2. System environment variables
+1. System environment variables
+2. `.env` file (loaded by `Program.cs` if present in the project root)
 3. `appsettings.json`
+4. Built-in defaults (port `11434`, model `deepseek-v4-pro`)
 
-**Discovery order:** `deepseek, openai, nvidia, openrouter, groq, ollama, moonshot, cerebras, zenmux`
+**Discovery order** (the tie-break when two providers offer the same model at equal priority):
+`deepseek, openai, moonshot, google, cerebras, zai, mistral, siliconflow, cloudflare, nvidia,
+openrouter, groq, zenmux, ollama`
+
+A provider is only registered when its API key is present. Cloudflare additionally requires
+`PROVIDER_CLOUDFLARE_BASE_URL`; without it the provider is skipped and a line is logged saying so.
 
 ### Provider Configuration
 
@@ -67,10 +76,26 @@ PROVIDER_CEREBRAS_BASE_URL=https://api.cerebras.ai
 PROVIDER_ZENMUX_API_KEY=your-zenmux-key
 PROVIDER_ZENMUX_BASE_URL=https://zenmux.ai/api
 
+# ── Free-tier providers ────────────────────────────────────────────
+# Mistral: ~1B tokens/month but only ~2 RPM — a fallback, not a primary.
+PROVIDER_MISTRAL_API_KEY=your-mistral-key
+PROVIDER_MISTRAL_BASE_URL=https://api.mistral.ai
+
+# SiliconFlow: free models capped at 50 req/day without purchased credit.
+PROVIDER_SILICONFLOW_API_KEY=sk-your-siliconflow-key
+PROVIDER_SILICONFLOW_BASE_URL=https://api.siliconflow.com
+
+# Cloudflare Workers AI: 10k neurons/day, resets 00:00 UTC.
+# BASE_URL IS MANDATORY — it embeds your account id and has no usable default.
+PROVIDER_CLOUDFLARE_API_KEY=your-cloudflare-api-token
+PROVIDER_CLOUDFLARE_BASE_URL=https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/v1
+
 # ── General ────────────────────────────────────────────────────────
 DEEPSEEK_MODEL=deepseek-v4-pro
 PROXY_PORT=11434
-PROXY_API_KEY=          # optional: set to require auth on the proxy
+PROXY_API_KEY=              # optional: set to require auth on the proxy
+PROXY_DASHBOARD_PUBLIC=     # optional: "false" also puts /dashboard behind the token
+PROXY_DATA_DIR=             # optional: where usage-rollup.json lives (default ./data)
 ```
 
 ### Base URLs
@@ -85,9 +110,19 @@ PROXY_API_KEY=          # optional: set to require auth on the proxy
 | Ollama Cloud | `https://ollama.com` | Ollama API format |
 | Moonshot/Kimi | `https://api.moonshot.ai` | - |
 | Cerebras | `https://api.cerebras.ai` | - |
+| Google | `https://generativelanguage.googleapis.com` | OpenAI-compatible surface under `/v1beta/openai` |
+| Z.AI | `https://api.z.ai/api/paas/v4` | Version lives in the base URL, so its chat/models paths are relative |
 | ZenMux | `https://zenmux.ai/api` | Multi-model aggregator |
+| Mistral | `https://api.mistral.ai` | 🆓 free "Experiment" tier |
+| SiliconFlow | `https://api.siliconflow.com` | 🆓 free models; the `.cn` platform needs a Chinese phone number |
+| Cloudflare Workers AI | *(none — must be set)* | 🆓 `…/accounts/{account_id}/ai/v1`; relative chat/models paths |
 
 > Only providers with configured API keys are active at runtime. Set `PROVIDER_*_BASE_URL` to override the default (e.g., for self-hosted or region-specific endpoints).
+>
+> **Relative paths are deliberate.** `ProviderHttpClientFactory` appends a trailing slash to every
+> base URL, so a provider whose URL carries a path segment (Z.AI's `/api/paas/v4`, Groq's
+> `/openai`, Cloudflare's account id) keeps it. A leading slash on `ChatPath` would resolve against
+> the host root and silently drop that segment — `ProviderCapabilitiesRegistryTests` guards it.
 
 ---
 
@@ -156,6 +191,10 @@ config/model-selection/
 | `models[].execution.reasoning_effort` | string | No | "low", "medium", "high" |
 | `models[].execution.timeout_seconds` | int | No | Request timeout |
 | `models[].execution.override_client_params` | bool | No | Force-override client values |
+| `models[].execution.uses_max_completion_tokens` | bool | No | Send the budget as `max_completion_tokens` (OpenAI GPT-5.x / o-series) |
+| `models[].execution.supports_temperature` | bool | No | When `false`, strip `temperature` and `top_p` entirely |
+| `models[].execution.supports_reasoning` | bool | No | Advertise reasoning capability in `/api/tags` |
+| `models[].upstream` | string | No | Upstream id when it differs from `match` |
 
 ### Override Client Params
 
@@ -192,7 +231,9 @@ Both endpoints include response headers for debugging routing decisions:
 | `X-Proxy-Resolved-Model` | Both | Internal model after resolution |
 | `X-Proxy-Upstream-Model` | Both | Model sent to upstream API |
 | `X-Proxy-Provider` | Both | Provider that handled the request |
-| `X-Proxy-Candidate-Count` | `/v1/*` | Number of failover candidates |
+| `X-Proxy-Candidate-Count` | Both | How many providers could have served this model |
+| `X-Proxy-Candidate-Index` | Both | Position of the provider that answered; non-zero means it failed over |
+| `X-Proxy-Attempts` | Both | How many candidates were actually tried |
 | `X-Proxy-Primary-Provider` | `/v1/*` | Primary candidate provider |
 | `X-Proxy-Primary-Upstream` | `/v1/*` | Primary upstream model |
 
@@ -240,6 +281,73 @@ Enabled models by provider:
 
 ---
 
+## Free-Tier Catalog (`config/free-tier/catalog.json`)
+
+Records what each provider gives away, on what cadence, under what request limits, and how
+comfortable its terms are with a self-hosted personal proxy. It is data rather than C# so a figure
+can be re-verified and corrected without a rebuild — free tiers change constantly.
+
+```jsonc
+{
+  "schema_version": 1,
+  "curated_at": "2026-07-31",          // a literal, NOT the file mtime: a deploy that rewrites
+                                        // timestamps would report a months-old catalog as fresh
+  "providers": [
+    {
+      "provider": "mistral",
+      "pool_key": "mistral-free",       // providers sharing a budget share a pool_key
+      "free_type": "recurring-monthly",
+      "monthly_tokens": 1000000000,
+      "requests_per_minute": 2,
+      "tos": "caution",
+      "tos_note": "Consumer terms scope API use to personal needs.",
+      "signup_url": "https://console.mistral.ai",
+      "source_url": "https://docs.mistral.ai/deployment/laplateforme/tier/",
+      "verified_at": "2026-07-31",
+      "notes": "Largest free pool of any provider, but ~2 RPM makes it a fallback, not a primary."
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `free_type` | `recurring-daily` · `recurring-monthly` · `recurring-uncapped` · `one-time-credit` · `none` |
+| `pool_key` | Shared-budget key. Counted **once**, at its largest member. |
+| `monthly_tokens` / `daily_tokens` | Published allowance. Daily is scaled by the length of the current month. |
+| `credit_tokens` | One-time signup credit; totalled separately, never in the steady figure. |
+| `requests_per_minute` / `requests_per_day` | Usually the *real* limit for a Copilot workload. |
+| `tos` | `ok` · `caution` · `ambiguous` · `avoid` · `unknown` — informational, not legal advice. |
+| `verified_at` | When the figure was last checked. Required; a number with no date is a number nobody can trust. |
+
+`recurring-uncapped` providers are permanently free but publish no token cap. They are **listed and
+never summed** — multiplying a rate limit by 24/7 produces a ceiling nobody reaches, which is
+exactly how free-tier totals get inflated.
+
+A malformed catalog logs a warning naming the file and yields **no** budget rather than silently
+wrong numbers. Every registered provider must appear, even as `"free_type": "none"`, or
+`FreeTierCatalogTests` fails.
+
+---
+
+## Persistent Usage (`data/usage-rollup.json`)
+
+A per-day, per-provider aggregate written by `UsageSnapshotService` every 60 seconds and on
+shutdown, so a **monthly** quota still means something after a restart. Location follows
+`PROXY_DATA_DIR`, defaulting to `./data` next to the binary (git-ignored).
+
+- Atomic writes (`.tmp` then move), so a crash mid-write cannot leave an unparseable file.
+- 400-day retention, pruned on write.
+- An unwritable directory degrades to memory-only with a warning; a corrupt file starts empty.
+  Losing a statistic must never stop the proxy from serving requests.
+- A hard kill (`taskkill /F`, container OOM) can lose up to 60 seconds of usage. A graceful stop
+  (Ctrl+C, `docker stop`) flushes first.
+
+It is a JSON rollup rather than SQLite on purpose: fourteen providers over a year is a few thousand
+rows with a single writer, which does not justify the project's first native dependency.
+
+---
+
 ## Advanced Configuration
 
 ### Local Ollama
@@ -263,8 +371,17 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 ### Proxy Authentication
 
 ```bash
-PROXY_API_KEY=your-proxy-key    # Requires bearer token on all endpoints
+PROXY_API_KEY=your-proxy-key        # Requires a bearer token
+PROXY_DASHBOARD_PUBLIC=false        # …on the dashboard page too (default: page is public)
 ```
+
+When `PROXY_API_KEY` is set, requests need `Authorization: Bearer <key>` or `X-Proxy-Key: <key>`.
+`/dashboard`, `/vendor/` and `/health` are exempt by default, because a browser cannot attach a
+bearer token to a plain navigation — open `/dashboard?key=YOUR_KEY` once and the page remembers it.
+
+The **data** endpoints are never exempt: `/api/usage`, `/api/billing`, `/api/free-tier` and
+`/api/resilience` expose spend, quota and key metadata. Prefix matching is path-boundary aware, so
+`/dashboard-secret` is still rejected.
 
 ### Port Configuration
 

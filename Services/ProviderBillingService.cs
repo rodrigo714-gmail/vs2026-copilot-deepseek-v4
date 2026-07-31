@@ -81,23 +81,33 @@ internal sealed class ProviderBillingService
         return fresh ?? cached;
     }
 
+    /// <summary>
+    /// Dispatches on the provider's declared <see cref="ProviderBillingProbe"/> rather than on its
+    /// name. A provider added to <c>ProviderCapabilitiesRegistry</c> without a probe therefore
+    /// still gets a well-formed stub built from its <c>BillingNote</c> — the previous name-based
+    /// switch returned <c>null</c> for anything it did not recognise, so every new provider
+    /// silently reported "no billing API for this provider" until someone remembered this file.
+    /// </summary>
     private async Task<ProviderBillingInfo?> FetchBillingForProvider(ProviderInfo provider)
     {
-        return provider.Name.ToLowerInvariant() switch
+        return provider.Capabilities.Billing switch
         {
-            "deepseek" => await FetchDeepSeekBilling(provider),
-            "openai" => await FetchOpenAiBilling(provider),
-            "openrouter" => await FetchOpenRouterBilling(provider),
-            "nvidia" => await FetchNvidiaBilling(provider),
-            "groq" => await FetchGroqBilling(provider),
-            "moonshot" => await FetchMoonshotBilling(provider),
-            "cerebras" => await FetchCerebrasBilling(provider),
-            "zenmux" => await FetchZenMuxBilling(provider),
-            "ollama" => await FetchOllamaBilling(provider),
-            "google" => await FetchGoogleBilling(provider),
-            _ => null
+            ProviderBillingProbe.DeepSeekBalance => await FetchDeepSeekBilling(provider),
+            ProviderBillingProbe.OpenAiDashboard => await FetchOpenAiBilling(provider),
+            ProviderBillingProbe.OpenRouterAuthKey => await FetchOpenRouterBilling(provider),
+            _ => NoBillingApi(provider)
         };
     }
+
+    private static ProviderBillingInfo NoBillingApi(ProviderInfo provider) => new()
+    {
+        ProviderName = provider.Name,
+        HasBillingApi = false,
+        IsAvailable = true,
+        Notes = string.IsNullOrEmpty(provider.Capabilities.BillingNote)
+            ? "No public billing API."
+            : provider.Capabilities.BillingNote
+    };
 
     // ── Provider-specific billing API calls ──────────────────────────
 
@@ -236,82 +246,6 @@ internal sealed class ProviderBillingService
         return info;
     }
 
-    private Task<ProviderBillingInfo?> FetchNvidiaBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "nvidia",
-            HasBillingApi = false,
-            IsAvailable = true,
-            Notes = "No public billing API. Usage tracked from response headers."
-        });
-    }
-
-    private Task<ProviderBillingInfo?> FetchGroqBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "groq",
-            HasBillingApi = false,
-            IsAvailable = true,
-            Notes = "No public billing API. Rate-limit headers available on each response."
-        });
-    }
-
-    private Task<ProviderBillingInfo?> FetchMoonshotBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "moonshot",
-            HasBillingApi = false,
-            IsAvailable = true,
-            Notes = "No public billing API."
-        });
-    }
-
-    private Task<ProviderBillingInfo?> FetchCerebrasBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "cerebras",
-            HasBillingApi = false,
-            IsAvailable = true,
-            Notes = "No public billing API."
-        });
-    }
-
-    private Task<ProviderBillingInfo?> FetchZenMuxBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "zenmux",
-            HasBillingApi = true,
-            IsAvailable = true,
-            Notes = "Credit-based usage tracked via response headers."
-        });
-    }
-
-    private Task<ProviderBillingInfo?> FetchOllamaBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "ollama",
-            HasBillingApi = false,
-            IsAvailable = true,
-            Notes = "No public billing API."
-        });
-    }
-
-    private Task<ProviderBillingInfo?> FetchGoogleBilling(ProviderInfo provider)
-    {
-        return Task.FromResult<ProviderBillingInfo?>(new ProviderBillingInfo
-        {
-            ProviderName = "google",
-            HasBillingApi = false,
-            IsAvailable = true,
-            Notes = "Usage tracked via quota headers in response."
-        });
-    }
 }
 
 // ── Data model ─────────────────────────────────────────────────────────

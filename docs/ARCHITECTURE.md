@@ -22,17 +22,22 @@ Comprehensive architecture documentation describing the proxy design, components
 
 ## Overview
 
-The proxy is a high-performance ASP.NET Core minimal API application that bridges GitHub Copilot, Cursor, Continue.dev, Visual Studio BYOM, and Ollama clients to **nine** AI providers:
+The proxy is a high-performance ASP.NET Core minimal API application that bridges GitHub Copilot, Cursor, Continue.dev, Visual Studio BYOM, and Ollama clients to **fourteen** AI providers:
 
 - DeepSeek
 - OpenAI
+- Google Gemini
 - NVIDIA NIM
 - Groq
 - OpenRouter
 - Ollama Cloud
 - Moonshot / Kimi
 - Cerebras
+- Z.AI
 - ZenMux
+- Mistral
+- SiliconFlow
+- Cloudflare Workers AI
 
 ### Design Principles
 
@@ -49,7 +54,8 @@ The proxy is a high-performance ASP.NET Core minimal API application that bridge
 - **Web Framework:** ASP.NET Core Minimal APIs (`WebApplication.CreateSlimBuilder`)
 - **Serialization:** System.Text.Json
 - **HTTP Client:** `SocketsHttpHandler` with 256 connections/server + HTTP/2 multiplexing
-- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **336 tests** in 15 test files
+- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **533 tests** in 21 test files
+- **Dependencies:** none. The `.csproj` has zero `PackageReference` entries; everything used ships in the shared framework.
 
 ---
 
@@ -63,22 +69,42 @@ WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(args);
 
 // 2. Register core services — all are singletons
 builder.Services.AddSingleton<ProviderHttpClientFactory>();
+builder.Services.AddSingleton<ProviderHealthService>();   // cooldowns; must precede ProviderRegistry
 builder.Services.AddSingleton<ProviderRegistry>();
 builder.Services.AddSingleton<ModelSelectionStore>();
 builder.Services.AddSingleton<ModelCatalogService>();
 builder.Services.AddSingleton<ReasoningCacheService>();
 builder.Services.AddSingleton<RequestTransformer>();
 builder.Services.AddSingleton<OllamaResponseBuilder>();
+builder.Services.AddSingleton<UsageTracker>();
+builder.Services.AddSingleton<ProxyLogger>();
 builder.Services.AddSingleton<ChatStreamingService>();
+builder.Services.AddSingleton<UsageRollupStore>();        // durable per-day usage
+builder.Services.AddSingleton<FreeTierCatalogStore>();    // free allowances + ToS verdicts
+builder.Services.AddSingleton<UsageTrackerService>();
+builder.Services.AddSingleton<ProviderBillingService>();
 
-// 3. Background hosted service
+// 3. Background hosted services
 builder.Services.AddHostedService<ProviderBenchmarkService>();
+builder.Services.AddHostedService<UsageSnapshotService>();  // 60s snapshot + rollup flush
 
-// 4. Map endpoints
+// 4. Middleware
+app.UseUpstreamErrorHandling();
+app.UseOptionalProxyAuthentication(proxyApiKey);
+app.UseStaticFiles();       // wwwroot: dashboard markup + vendored Chart.js
+
+// 5. Map endpoints
 app.MapOpenAiEndpoints();   // /v1/models, /v1/chat/completions
+app.MapUsageEndpoints();    // /usage, /usage/summary, /usage/pricing, /usage/reset
+app.MapDashboardEndpoints();// /api/usage, /api/billing, /dashboard
+app.MapFreeTierEndpoints(); // /api/free-tier/summary
 app.MapOllamaEndpoints();   // /api/version, /api/tags, /api/show, /api/chat
-app.MapHealthEndpoints();   // /health
+app.MapHealthEndpoints();   // /health, /api/resilience/cooldowns, /api/resilience/reset
 ```
+
+> `ProviderHealthService` is registered **before** `ProviderRegistry` because the registry takes it
+> as an optional constructor argument; the container picks the widest constructor it can satisfy.
+> Its own constructor is `public` for the same reason — the DI container ignores internal ones.
 
 ### Core Components
 
@@ -211,9 +237,13 @@ Both endpoints include response headers for debugging:
 | `X-Proxy-Resolved-Model` | Both | Internal resolved model id |
 | `X-Proxy-Upstream-Model` | Both | Model sent to upstream API |
 | `X-Proxy-Provider` | Both | Provider that handled the request |
-| `X-Proxy-Candidate-Count` | `/v1/*` | Number of failover candidates |
+| `X-Proxy-Candidate-Count` | Both | How many providers could have served this model |
+| `X-Proxy-Candidate-Index` | Both | Zero-based position of the provider that answered; non-zero means it failed over |
+| `X-Proxy-Attempts` | Both | How many candidates were actually tried |
 | `X-Proxy-Primary-Provider` | `/v1/*` | Primary candidate provider |
 | `X-Proxy-Primary-Upstream` | `/v1/*` | Primary upstream model |
+
+`X-Proxy-Provider` and `X-Proxy-Upstream-Model` are written immediately before the response body, so they always name the provider that **served** the request rather than the one tried first.
 
 ---
 
@@ -252,7 +282,71 @@ Currently enabled for:
 
 ## Failing Over
 
-Non-streaming requests try the next candidate in priority order if the primary fails. Streaming requests do **not** failover (headers already sent).
+Every chat path — `/v1/chat/completions` and `/api/chat`, streaming and non-streaming — walks the
+candidate list returned by `ProviderRegistry.ResolveRoutePlan()` until one provider answers.
+
+**Why streaming can fail over.** `HttpCompletionOption.ResponseHeadersRead` returns the upstream
+status before any body byte arrives, and assigning `Response.StatusCode`/headers does not commit
+the response in ASP.NET Core — only a write or an explicit flush does. So the failover point is
+the upstream success check. Once the first byte reaches the client the response is committed to
+that provider and there is no going back; that case is recorded, not retried.
+
+### Deciding whether to retry — `Infrastructure/UpstreamFailureClassifier.cs`
+
+The HTTP status alone does not say what went wrong, so the body is inspected:
+
+| Status | Kind | Retry elsewhere? |
+|---|---|---|
+| `429` with an explicit quota keyword (`daily limit`, `monthly quota`, `out of credits`, Cloudflare's `daily free allocation`, Google's `resource has been exhausted … reset after`) | `QuotaExhausted` | yes |
+| `429` bare | `RateLimit` | yes |
+| `402` | `QuotaExhausted` (credit) | yes |
+| `401` / `403` | `Auth`, or `QuotaExhausted` when the body says so | yes |
+| `404` / `410` | `ModelUnavailable` (scoped to that model only) | yes |
+| `408` / `5xx` | `Transient` | yes |
+| `400` / `413` / `422` | `BadRequest` | **no** |
+
+Two rules earn their keep:
+
+- **A bare 429 is never promoted to an exhausted quota.** Only an explicit keyword does it,
+  because standing a healthy provider down until midnight over a one-minute blip is far worse
+  than paying for one retry.
+- **A 4xx carrying rate-limit wording is demoted back to `RateLimit`.** Groq answers an over-TPM
+  request with `413 Payload Too Large` and `"code":"rate_limit_exceeded"`; read literally that is
+  a malformed request and the router would give up with every other provider idle. A genuinely
+  oversized body — no rate-limit wording — still fails fast.
+
+### Standing a provider down — `Services/ProviderHealthService.cs`
+
+| Failure | Scope | Cooldown |
+|---|---|---|
+| `QuotaExhausted` (daily) | provider | until next local midnight |
+| `QuotaExhausted` (monthly) | provider | until the 1st of next month |
+| `QuotaExhausted` (credit) | provider | 6 h, then re-probe — credits refill on a top-up, not a clock |
+| `RateLimit` | provider | `5s · 2ⁿ`, capped at 5 min |
+| `Auth` | provider | 15 min |
+| `Transient` | provider | nothing until 3 consecutive failures, then 30 s escalating |
+| `ModelUnavailable` | **(provider, model)** | 30 min, escalating to 24 h |
+
+An upstream `Retry-After` (or an `x-ratelimit-reset-*` header) always wins over anything computed
+locally. A successful response **halves** the stored failure count and deletes the entry at zero,
+so a provider that recovered early stops being penalised — recovery is not purely timer expiry.
+
+State is in-memory on purpose: a restart is exactly when you want to re-probe, and a stale
+cooldown outliving a corrected API key would be worse than re-learning it.
+
+### Ordering: degrade, never exclude
+
+`ResolveRoutePlan` calls the untouched, pure `ResolveCandidates` and passes the result through
+`ProviderHealthService.Order()`, which puts healthy providers first (original order preserved) and
+appends cooling ones by soonest expiry. It **never returns an empty list**: across fourteen free
+tiers a bad hour can cool them all, and a last-ditch attempt beats an error the user cannot act on.
+
+`ResolveCandidates` stays health-free deliberately — `ProviderBenchmarkService` depends on that
+purity, since it specifically wants to probe cooling providers, which is how they are rediscovered
+as healthy.
+
+An explicit `model@provider` pin resolves to a single candidate, so it is neither reordered nor
+failed over: answering an explicit choice from a different provider is worse than an honest error.
 
 ---
 

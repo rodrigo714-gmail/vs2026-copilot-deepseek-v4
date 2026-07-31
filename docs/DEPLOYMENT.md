@@ -85,18 +85,48 @@ services:
       PROVIDER_OLLAMACLOUD_API_KEY: ${PROVIDER_OLLAMACLOUD_API_KEY}
       PROVIDER_MOONSHOT_API_KEY: ${PROVIDER_MOONSHOT_API_KEY}
       PROVIDER_CEREBRAS_API_KEY: ${PROVIDER_CEREBRAS_API_KEY}
+      PROVIDER_ZAI_API_KEY: ${PROVIDER_ZAI_API_KEY}
+      PROVIDER_ZENMUX_API_KEY: ${PROVIDER_ZENMUX_API_KEY}
+      PROVIDER_GOOGLE_API_KEY: ${PROVIDER_GOOGLE_API_KEY}
+      # Free-tier providers
+      PROVIDER_MISTRAL_API_KEY: ${PROVIDER_MISTRAL_API_KEY}
+      PROVIDER_SILICONFLOW_API_KEY: ${PROVIDER_SILICONFLOW_API_KEY}
+      PROVIDER_CLOUDFLARE_API_KEY: ${PROVIDER_CLOUDFLARE_API_KEY}
+      # Mandatory for Cloudflare — the URL embeds your account id and has no usable default
+      PROVIDER_CLOUDFLARE_BASE_URL: ${PROVIDER_CLOUDFLARE_BASE_URL}
 
       PROXY_PORT: 11434
+      PROXY_DATA_DIR: /app/data
       LOG_LEVEL: Information
       REQUEST_TIMEOUT: 300
+    volumes:
+      # Without this, every container recreation wipes the month-to-date token counters.
+      - ai-proxy-hub-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:11434/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
+      start_period: 20s
+
+volumes:
+  ai-proxy-hub-data:
 ```
+
+### Persisting usage across restarts
+
+The proxy writes a per-day, per-provider token rollup to `$PROXY_DATA_DIR/usage-rollup.json`
+(default `/app/data` in the image). **Mount a volume there.** It is what makes a *monthly*
+free-tier budget meaningful — without it, `/api/free-tier/summary` restarts from zero every time
+the container is recreated.
+
+The image creates `/app/data` and hands it to the non-root app user before dropping privileges. If
+the directory is ever unwritable — a read-only mount, a restrictive `securityContext` — the proxy
+logs a warning and carries on with in-memory counters. It never fails to start over a statistic.
+
+A graceful stop (`docker stop`, SIGTERM) flushes before exiting. A hard kill (`docker kill`, an OOM
+kill) can lose up to 60 seconds of usage, which is the flush interval.
 
 ### Docker Image
 
@@ -292,12 +322,24 @@ PROVIDER_OPENROUTER_API_KEY=sk-or-...
 PROVIDER_OLLAMACLOUD_API_KEY=...
 PROVIDER_MOONSHOT_API_KEY=sk-...
 PROVIDER_CEREBRAS_API_KEY=csk-...
+PROVIDER_GOOGLE_API_KEY=...
+PROVIDER_ZAI_API_KEY=...
+PROVIDER_ZENMUX_API_KEY=...
+
+# Free-tier providers
+PROVIDER_MISTRAL_API_KEY=...           # ~1B tokens/month, but only ~2 RPM
+PROVIDER_SILICONFLOW_API_KEY=sk-...    # free models, 50 req/day without purchased credit
+PROVIDER_CLOUDFLARE_API_KEY=...        # 10k neurons/day, resets 00:00 UTC
+PROVIDER_CLOUDFLARE_BASE_URL=https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/v1
 ```
 
-> The Moonshot and Cerebras providers were added in 2026-Q2; their env-var prefix is
-> `PROVIDER_MOONSHOT_API_KEY` and `PROVIDER_CEREBRAS_API_KEY` respectively. The proxy
-> automatically discovers a provider as long as its key is set — see
+> The proxy discovers a provider as long as its key is set — see
 > `Services/ProviderRegistry.cs` → `DiscoverProviders()` for the order.
+>
+> **Cloudflare is the one exception:** its base URL embeds your account id, so there is no usable
+> default. With only `PROVIDER_CLOUDFLARE_API_KEY` set, the provider is skipped at startup and a
+> line is logged saying why. Registering it against a placeholder host would send every request
+> somewhere that cannot answer.
 
 ### Optional Variables
 
@@ -305,7 +347,9 @@ PROVIDER_CEREBRAS_API_KEY=csk-...
 # Proxy settings
 PROXY_PORT=11434                       # Default: 11434
 DEFAULT_MODEL=deepseek-v4-pro          # Default: deepseek-v4-pro
-PROXY_API_KEY=secret-key-here          # If set, requires Bearer auth
+PROXY_API_KEY=secret-key-here          # If set, requires Bearer auth (or X-Proxy-Key)
+PROXY_DASHBOARD_PUBLIC=false           # Also put /dashboard behind the token (default: page is public)
+PROXY_DATA_DIR=/app/data               # Where usage-rollup.json lives (default: ./data)
 LOG_LEVEL=Information                  # Debug, Information, Warning, Error
 
 # Performance
