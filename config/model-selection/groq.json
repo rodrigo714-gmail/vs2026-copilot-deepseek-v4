@@ -37,13 +37,14 @@
     },
     {
       "_comment": "meta-llama/llama-4-scout-17b-16e-instruct was removed from Groq's catalog (HTTP 404 model_not_found, verified 2026-07-30).",
+      "_comment": "Compound models run Groq's own server-side tools and answer HTTP 400 to any client tools payload; supports_tools=false makes RequestTransformer strip tools/tool_choice.",
       "match": "groq/compound-mini",
       "priority": 3,
       "enabled": true,
       "execution": {
         "context_length": 131072,
         "max_output_tokens": 8192,
-        "supports_tools": true,
+        "supports_tools": false,
         "supports_vision": false,
         "family": "groq",
         "temperature": 0.2,
@@ -102,13 +103,14 @@
       }
     },
     {
+      "_comment": "Same as compound-mini: server-side tools only, client tools payload answers HTTP 400.",
       "match": "groq/compound",
       "priority": 7,
       "enabled": true,
       "execution": {
         "context_length": 131072,
         "max_output_tokens": 8192,
-        "supports_tools": true,
+        "supports_tools": false,
         "supports_vision": false,
         "family": "groq",
         "temperature": 0.2,

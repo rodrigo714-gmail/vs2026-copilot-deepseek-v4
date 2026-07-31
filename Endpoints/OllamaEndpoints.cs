@@ -509,6 +509,14 @@ internal static class OllamaEndpoints
                 content = reasoningEl.GetString() ?? string.Empty;
             }
 
+            // Cerebras, Groq and OpenRouter name the field `reasoning` instead.
+            if (string.IsNullOrWhiteSpace(content)
+                && message.TryGetProperty("reasoning", out JsonElement reasoningAltEl)
+                && reasoningAltEl.ValueKind == JsonValueKind.String)
+            {
+                content = reasoningAltEl.GetString() ?? string.Empty;
+            }
+
             return true;
         }
         catch (JsonException)

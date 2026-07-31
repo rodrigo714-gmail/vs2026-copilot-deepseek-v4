@@ -20,6 +20,7 @@
       }
     },
     {
+      "_comment": "No reasoning_effort here: OpenAI answers 400 'Function tools with reasoning_effort are not supported for gpt-5.5' the moment an agent-mode client sends tools. gpt-5.5 reasons at its default effort instead.",
       "match": "gpt-5.5",
       "priority": 2,
       "enabled": true,
@@ -30,7 +31,6 @@
         "supports_vision": true,
         "family": "openai",
         "max_tokens": 8192,
-        "reasoning_effort": "medium",
         "timeout_seconds": 120,
         "uses_max_completion_tokens": true,
         "supports_temperature": false

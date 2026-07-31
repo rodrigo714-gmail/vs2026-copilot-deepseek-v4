@@ -18,7 +18,7 @@ solution are all named `ai-proxy-hub`. Older names (`vs2026-copilot-deepseek-v4`
 # Build
 dotnet build
 
-# Run all tests (551 tests, xUnit + WebApplicationFactory, fully offline)
+# Run all tests (557 tests, xUnit + WebApplicationFactory, fully offline)
 dotnet test
 
 # Run specific test suite
@@ -201,7 +201,16 @@ providers before. `EndpointTests.ApiChat_Streaming_LastLineHasDoneTrue` guards i
 
 Reasoning models (DeepSeek, Nemotron, GLM) can spend their whole budget in `reasoning_content`
 and return empty `content`. Both directions fall back to the reasoning text so the client never
-sees a blank reply.
+sees a blank reply. The field is `reasoning_content` on DeepSeek-style providers but plain
+`reasoning` on Cerebras, Groq and OpenRouter — the fallback accepts both
+(`ReasoningFallbackTests.cs`).
+
+Tool calls cross the format boundary in both directions for Ollama-native upstreams:
+Ollama `tool_calls` (arguments as JSON *object*, no id) are converted to OpenAI wire format
+(generated `id`, `type=function`, arguments as JSON *string*, `finish_reason: "tool_calls"`),
+and OpenAI-format agent history (assistant `tool_calls`, `tool_call_id`) is rewritten to
+Ollama format on the way up. Without this, every Ollama Cloud model looked text-only to
+VS 2026 agent mode.
 
 ### Parameter Filtering Rules (RequestTransformer)
 
@@ -210,7 +219,7 @@ sees a blank reply.
 - `top_k` → removed for DeepSeek, OpenAI, Moonshot/Kimi; kept for NVIDIA, Groq, OpenRouter
 - `reasoning_effort` → only DeepSeek and OpenAI o-series; removed for NVIDIA, Groq, Moonshot/Kimi
 - `top_p` → omitted when `reasoning_effort` is set (DeepSeek API rule: "don't combine sampling parameters with reasoning")
-- `tools`/`tool_choice` → kept for DeepSeek, OpenAI, NVIDIA, OpenRouter, Moonshot, Cerebras; **removed for Groq** (Groq's chat API has tool quirks)
+- `tools`/`tool_choice` → forwarded to every provider, **stripped per model** when the model's `execution.supports_tools` is `false`. Groq's `compound`/`compound-mini` are the live case: they run Groq's own server-side tools and answer HTTP 400 to a client tools payload.
 - `function_call` → removed for all (deprecated)
 - `override_client_params=true` → force-overwrite the client value with the configured one for `temperature`, `top_p`, `max_tokens`, `reasoning_effort`
 - `uses_max_completion_tokens=true` → rewrite `max_tokens` to `max_completion_tokens` (OpenAI GPT-5.x / o-series)
@@ -352,7 +361,7 @@ Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
 - Tests that construct a `ProviderRegistry` or otherwise touch process env vars MUST be in `[Collection("Proxy")]` — `ProxyFixture` boots `Program.cs`, which loads the developer's real `.env` into the process, so anything running in parallel with it races
 - Those tests must also use `ProviderEnvScope`, which clears every `PROVIDER_*` variable derived from `ProviderCapabilitiesRegistry` and restores them on dispose. Never hand-write the list: a forgotten provider picks up a real API key from `.env` and quietly changes collision resolution
-- **551 tests** across 22 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
+- **557 tests** across 23 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
 
 ## Credential Separation
 

@@ -59,6 +59,8 @@ internal sealed class ChatStreamingService
                             {
                                 if (delta.TryGetProperty("reasoning_content", out JsonElement rc) && rc.ValueKind == JsonValueKind.String)
                                 { string? rct = rc.GetString(); if (!string.IsNullOrEmpty(rct)) sb.Append(rct); }
+                                else if (delta.TryGetProperty("reasoning", out JsonElement rAlt) && rAlt.ValueKind == JsonValueKind.String)
+                                { string? rat = rAlt.GetString(); if (!string.IsNullOrEmpty(rat)) sb.Append(rat); }
                                 if (delta.TryGetProperty("tool_calls", out JsonElement tcs) && tcs.ValueKind == JsonValueKind.Array)
                                 {
                                     hasTc = true;
@@ -176,8 +178,13 @@ internal sealed class ChatStreamingService
                         if (delta.TryGetProperty("content", out JsonElement contentEl) && contentEl.ValueKind == JsonValueKind.String)
                             contentDelta = contentEl.GetString();
 
+                        // DeepSeek-style providers emit `reasoning_content`; Cerebras, Groq and
+                        // OpenRouter emit `reasoning` instead — accept both or the fallback below
+                        // never fires and a reasoning-only answer reaches the client blank.
                         if (delta.TryGetProperty("reasoning_content", out JsonElement rcEl) && rcEl.ValueKind == JsonValueKind.String)
                             reasoningDelta = rcEl.GetString();
+                        else if (delta.TryGetProperty("reasoning", out JsonElement rEl) && rEl.ValueKind == JsonValueKind.String)
+                            reasoningDelta = rEl.GetString();
 
                         if (delta.TryGetProperty("tool_calls", out JsonElement tcs) && tcs.ValueKind == JsonValueKind.Array)
                             AccumulateToolCalls(tcs, toolCalls);

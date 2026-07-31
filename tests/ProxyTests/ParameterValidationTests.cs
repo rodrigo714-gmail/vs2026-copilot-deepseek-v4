@@ -166,8 +166,6 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("gpt-5.5-pro")]
-    [InlineData("gpt-5.5")]
     [InlineData("o4-mini")]
     public void OpenAI_ReasoningCapableModels_ReasoningEffortInjected(string model)
     {
@@ -175,6 +173,21 @@ public class ParameterValidationTests
         JsonElement result = Transform(sut, model, "openai");
         Assert.True(result.TryGetProperty("reasoning_effort", out _),
             $"OpenAI/{model}: reasoning_effort should be injected");
+    }
+
+    [Theory]
+    [InlineData("gpt-5.5")]
+    [InlineData("gpt-5.5-pro")]
+    public void OpenAI_Gpt55_NoReasoningEffortInjected_IncompatibleWithTools(string model)
+    {
+        // OpenAI answers 400 "Function tools with reasoning_effort are not supported for
+        // gpt-5.5" the moment an agent-mode client (VS 2026 Copilot) sends tools, so the
+        // config deliberately leaves reasoning_effort unset for the gpt-5.5 family.
+        // (gpt-5.5-pro resolves to the enabled gpt-5.5 entry for injection purposes.)
+        RequestTransformer sut = CreateTransformer();
+        JsonElement result = Transform(sut, model, "openai");
+        Assert.False(result.TryGetProperty("reasoning_effort", out _),
+            $"OpenAI/{model}: reasoning_effort must NOT be injected — OpenAI rejects it combined with tools");
     }
 
     [Theory]
@@ -571,7 +584,7 @@ public class ParameterValidationTests
     [InlineData("moonshot", 6)]      // 6 enabled (kimi-k2.5 disabled)
     [InlineData("cerebras", 2)]
     [InlineData("ollama", 9)]        // curated Ollama Cloud roster, single ollama.json
-    [InlineData("zenmux", 14)]       // 14 enabled (multi-provider aggregator)
+    [InlineData("zenmux", 0)]        // whole roster disabled 2026-07-31: HTTP 402 reject_no_credit on every model
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {
         ModelSelectionStore store = new();
