@@ -23,11 +23,16 @@ internal sealed class RequestTransformer
         bool renameMaxTokens = exec.UsesMaxCompletionTokens;
         bool stripSampling = exec.SupportsTemperature == false;
 
+        // Models flagged supports_tools=false reject a tools payload outright
+        // (Groq's compound models answer HTTP 400 "`tool calling` is not supported"),
+        // so the tools/tool_choice fields must never reach them.
+        bool stripTools = exec.SupportsTools == false;
+
         bool hasAnyDefault = exec.Temperature.HasValue
             || exec.TopP.HasValue
             || exec.MaxTokensPreferred.HasValue
             || !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
-        if (!hasAnyDefault && !renameMaxTokens && !stripSampling)
+        if (!hasAnyDefault && !renameMaxTokens && !stripSampling && !stripTools)
         {
             return rawBody;
         }
@@ -160,6 +165,10 @@ internal sealed class RequestTransformer
                 else if (prop.NameEquals("top_k") && !supportsTopK)
                 {
                     // Skip top_k for providers that don't support it
+                    continue;
+                }
+                else if (stripTools && (prop.NameEquals("tools") || prop.NameEquals("tool_choice")))
+                {
                     continue;
                 }
                 else

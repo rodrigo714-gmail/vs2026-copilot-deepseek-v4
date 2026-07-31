@@ -1,10 +1,11 @@
 {
   "provider": "zenmux",
+  "_comment": "Every model disabled 2026-07-31: the whole roster answers HTTP 402 reject_no_credit ('Access denied: no credit'). The API key works — the ZenMux account simply has no balance. Top up at https://zenmux.ai and flip the models you want back to enabled=true; verify with ./scripts/test-all-providers.ps1 first.",
   "models": [
     {
       "match": "anthropic/claude-fable-5",
       "priority": 1,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -21,7 +22,7 @@
     {
       "match": "anthropic/claude-opus-4.8",
       "priority": 2,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -38,7 +39,7 @@
     {
       "match": "openai/gpt-5.5-pro",
       "priority": 3,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -55,7 +56,7 @@
     {
       "match": "openai/gpt-5.5",
       "priority": 4,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -72,7 +73,7 @@
     {
       "match": "google/gemini-3.5-flash",
       "priority": 5,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 65536,
@@ -88,7 +89,7 @@
     {
       "match": "x-ai/grok-4.3",
       "priority": 6,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -104,7 +105,7 @@
     {
       "match": "z-ai/glm-5.2",
       "priority": 7,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -121,7 +122,7 @@
       "match": "deepseek/deepseek-v4-pro",
       "upstream": "deepseek-v4-pro",
       "priority": 8,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 384000,
@@ -138,7 +139,7 @@
       "match": "deepseek/deepseek-v4-flash",
       "upstream": "deepseek-v4-flash",
       "priority": 9,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 131072,
@@ -154,7 +155,7 @@
     {
       "match": "moonshotai/kimi-k2.7-code",
       "priority": 10,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 262144,
         "max_output_tokens": 262144,
@@ -171,7 +172,7 @@
     {
       "match": "moonshotai/kimi-k2.6",
       "priority": 11,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 262144,
         "max_output_tokens": 262144,
@@ -188,7 +189,7 @@
     {
       "match": "qwen/qwen3.7-plus",
       "priority": 12,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,
@@ -204,7 +205,7 @@
     {
       "match": "qwen/qwen3-coder-plus",
       "priority": 13,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1048576,
         "max_output_tokens": 262000,
@@ -220,7 +221,7 @@
     {
       "match": "minimax/minimax-m3",
       "priority": 14,
-      "enabled": true,
+      "enabled": false,
       "execution": {
         "context_length": 1000000,
         "max_output_tokens": 65536,

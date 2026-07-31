@@ -431,6 +431,34 @@ public class RequestTransformerTests
         Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));
     }
 
+    [Fact]
+    public void ApplyExecutionDefaults_StripsToolsForModelsFlaggedSupportsToolsFalse()
+    {
+        // groq/compound is flagged supports_tools=false in groq.json: Groq's compound
+        // models run server-side tools and answer HTTP 400 to any client tools payload.
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[],"tools":[{"type":"function","function":{"name":"f","parameters":{}}}],"tool_choice":"auto"}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "groq/compound", default);
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.TryGetProperty("tools", out _));
+        Assert.False(doc.RootElement.TryGetProperty("tool_choice", out _));
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_KeepsToolsForModelsThatSupportThem()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[],"tools":[{"type":"function","function":{"name":"f","parameters":{}}}],"tool_choice":"auto"}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "qwen/qwen3.6-27b", default);
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.TryGetProperty("tools", out _));
+        Assert.True(doc.RootElement.TryGetProperty("tool_choice", out _));
+    }
+
     private static RequestTransformer CreateTransformer()
     {
         return CreateTransformer(out _);

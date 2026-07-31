@@ -178,12 +178,14 @@ internal static class OpenAiEndpoints
                         {
                             var swOllama = System.Diagnostics.Stopwatch.StartNew();
                             OllamaCandidateResult ollamaResult = await TryHandleOllamaCloudChatCompletion(
-                                ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, requestCt, ct);
+                                ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, i, requestCt, ct);
                             swOllama.Stop();
 
                             if (ollamaResult.Handled)
                             {
-                                StampWinningProvider(ctx, candidateProvider, candidateUpstream, i);
+                                // Diagnostic headers were stamped inside the handler BEFORE the body
+                                // was written — setting them here threw "Headers are read-only" and
+                                // aborted every successful non-streaming /v1 call to an Ollama upstream.
                                 providerHealth.RecordSuccess(candidateProvider.Name, effectiveModel);
                                 return;
                             }
@@ -456,6 +458,7 @@ internal static class OpenAiEndpoints
         string openAiRequestBody,
         string effectiveModel,
         string upstreamModel,
+        int candidateIndex,
         CancellationToken requestCt,
         CancellationToken clientCt)
     {
@@ -476,6 +479,8 @@ internal static class OpenAiEndpoints
         }
 
         string openAiResponseBody = ConvertOllamaChatToOpenAiCompletion(respBody, effectiveModel);
+        // Headers must go out before the first body byte; the caller must not stamp again.
+        StampWinningProvider(ctx, provider, upstreamModel, candidateIndex);
         ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = "application/json";
         await ctx.Response.WriteAsync(openAiResponseBody, clientCt);
@@ -529,6 +534,7 @@ internal static class OpenAiEndpoints
 
         string chatcmplId = $"chatcmpl-{Guid.NewGuid():N}";
         long created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        int emittedToolCallCount = 0;
 
         using StringContent streamContent = new(streamRequestBody, Encoding.UTF8, "application/json");
         using HttpRequestMessage streamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = streamContent };
@@ -575,6 +581,7 @@ internal static class OpenAiEndpoints
                 // "message.thinking" first while leaving "message.content" empty. Fall back to
                 // thinking when content is empty so VS 2026 BYOM sees a continuous stream.
                 string? deltaContent = null;
+                List<Dictionary<string, object?>>? deltaToolCalls = null;
                 if (root.TryGetProperty("message", out JsonElement msg))
                 {
                     bool hasContent = msg.TryGetProperty("content", out JsonElement contentEl) &&
@@ -589,13 +596,28 @@ internal static class OpenAiEndpoints
                     {
                         deltaContent = thinkingEl.GetString();
                     }
+
+                    // Agent-mode clients (VS 2026 Copilot) drive tools through this path;
+                    // dropping the tool_calls here made every Ollama Cloud model look like
+                    // it could only ever answer prose.
+                    if (msg.TryGetProperty("tool_calls", out JsonElement tcEl)
+                        && tcEl.ValueKind == JsonValueKind.Array
+                        && tcEl.GetArrayLength() > 0)
+                    {
+                        deltaToolCalls = ConvertOllamaToolCalls(tcEl, emittedToolCallCount, withIndex: true);
+                        emittedToolCallCount += deltaToolCalls.Count;
+                        if (deltaToolCalls.Count == 0) deltaToolCalls = null;
+                    }
                 }
 
                 bool isDone = root.TryGetProperty("done", out JsonElement doneEl) && doneEl.GetBoolean();
 
-                // Skip chunks with empty/null content — VS 2026 BYOM doesn't handle them well
-                if (!string.IsNullOrWhiteSpace(deltaContent))
+                // Skip chunks with no content AND no tool calls — VS 2026 BYOM doesn't handle them well
+                if (!string.IsNullOrWhiteSpace(deltaContent) || deltaToolCalls is not null)
                 {
+                    object delta = deltaToolCalls is not null
+                        ? new { role = "assistant", content = deltaContent ?? string.Empty, tool_calls = deltaToolCalls }
+                        : new { role = "assistant", content = deltaContent };
                     object sseChunk = new
                     {
                         id = chatcmplId,
@@ -607,7 +629,7 @@ internal static class OpenAiEndpoints
                             new
                             {
                                 index = 0,
-                                delta = new { role = "assistant", content = deltaContent },
+                                delta,
                                 finish_reason = (string?)null
                             }
                         }
@@ -630,7 +652,7 @@ internal static class OpenAiEndpoints
                             {
                                 index = 0,
                                 delta = new { },
-                                finish_reason = "stop"
+                                finish_reason = emittedToolCallCount > 0 ? "tool_calls" : "stop"
                             }
                         }
                     };
@@ -707,6 +729,15 @@ internal static class OpenAiEndpoints
                 foreach (JsonProperty mp in msg.EnumerateObject())
                 {
                     if (mp.NameEquals("content") && hasMultiPartContent)
+                        continue;
+                    // Agent history: OpenAI sends assistant tool_calls with arguments as a JSON
+                    // string; Ollama wants the object. tool_call_id has no Ollama equivalent.
+                    if (mp.NameEquals("tool_calls") && mp.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        WriteOllamaToolCalls(writer, mp.Value);
+                        continue;
+                    }
+                    if (mp.NameEquals("tool_call_id"))
                         continue;
                     mp.WriteTo(writer);
                 }
@@ -839,6 +870,19 @@ internal static class OpenAiEndpoints
             content = thinkingElement.GetString() ?? string.Empty;
         }
 
+        // Ollama tool calls carry arguments as a JSON object and no id/type; OpenAI
+        // clients (System.ClientModel in VS 2026) require id, type and arguments as a
+        // serialized JSON string, so forwarding the element verbatim breaks them.
+        List<Dictionary<string, object?>>? toolCalls = null;
+        if (message.ValueKind == JsonValueKind.Object
+            && message.TryGetProperty("tool_calls", out JsonElement tcs)
+            && tcs.ValueKind == JsonValueKind.Array
+            && tcs.GetArrayLength() > 0)
+        {
+            toolCalls = ConvertOllamaToolCalls(tcs, startIndex: 0, withIndex: false);
+            if (toolCalls.Count == 0) toolCalls = null;
+        }
+
         object completion = new
         {
             id = $"chatcmpl-{Guid.NewGuid():N}",
@@ -854,17 +898,98 @@ internal static class OpenAiEndpoints
                     {
                         role = "assistant",
                         content,
-                        tool_calls = message.ValueKind == JsonValueKind.Object && message.TryGetProperty("tool_calls", out JsonElement tcs)
-                            ? tcs
-                            : (JsonElement?)null
+                        tool_calls = toolCalls
                     },
-                    finish_reason = root.TryGetProperty("done_reason", out JsonElement dr) && dr.ValueKind == JsonValueKind.String
-                        ? dr.GetString()
-                        : "stop"
+                    finish_reason = toolCalls is not null
+                        ? "tool_calls"
+                        : root.TryGetProperty("done_reason", out JsonElement dr) && dr.ValueKind == JsonValueKind.String
+                            ? dr.GetString()
+                            : "stop"
                 }
             }
         };
 
         return JsonSerializer.Serialize(completion, JsonDefaults.SnakeCase);
+    }
+
+    /// <summary>
+    /// Converts Ollama-format tool calls (<c>function.arguments</c> is a JSON object) to the
+    /// OpenAI wire format: generated <c>id</c>, <c>type=function</c> and <c>arguments</c> as a
+    /// serialized JSON string. Streaming deltas additionally require a per-call <c>index</c>.
+    /// </summary>
+    private static List<Dictionary<string, object?>> ConvertOllamaToolCalls(JsonElement toolCalls, int startIndex, bool withIndex)
+    {
+        List<Dictionary<string, object?>> result = [];
+        foreach (JsonElement tc in toolCalls.EnumerateArray())
+        {
+            if (!tc.TryGetProperty("function", out JsonElement fn) || fn.ValueKind != JsonValueKind.Object)
+                continue;
+
+            string name = fn.TryGetProperty("name", out JsonElement n) && n.ValueKind == JsonValueKind.String
+                ? n.GetString() ?? string.Empty
+                : string.Empty;
+            string arguments = "{}";
+            if (fn.TryGetProperty("arguments", out JsonElement args))
+                arguments = args.ValueKind == JsonValueKind.String ? args.GetString() ?? "{}" : args.GetRawText();
+
+            Dictionary<string, object?> call = new()
+            {
+                ["id"] = $"call_{Guid.NewGuid():N}",
+                ["type"] = "function",
+                ["function"] = new Dictionary<string, object?> { ["name"] = name, ["arguments"] = arguments }
+            };
+            if (withIndex)
+                call["index"] = startIndex + result.Count;
+            result.Add(call);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Rewrites OpenAI-format assistant <c>tool_calls</c> (arguments as a JSON string) into
+    /// Ollama format (arguments as a JSON object) when converting agent history for an
+    /// Ollama-native upstream.
+    /// </summary>
+    private static void WriteOllamaToolCalls(Utf8JsonWriter writer, JsonElement toolCalls)
+    {
+        writer.WritePropertyName("tool_calls");
+        writer.WriteStartArray();
+        foreach (JsonElement tc in toolCalls.EnumerateArray())
+        {
+            if (!tc.TryGetProperty("function", out JsonElement fn) || fn.ValueKind != JsonValueKind.Object)
+                continue;
+
+            writer.WriteStartObject();
+            writer.WritePropertyName("function");
+            writer.WriteStartObject();
+            if (fn.TryGetProperty("name", out JsonElement n) && n.ValueKind == JsonValueKind.String)
+                writer.WriteString("name", n.GetString());
+            writer.WritePropertyName("arguments");
+            if (fn.TryGetProperty("arguments", out JsonElement args) && args.ValueKind == JsonValueKind.String)
+            {
+                try
+                {
+                    using JsonDocument parsed = JsonDocument.Parse(args.GetString() ?? "{}");
+                    parsed.RootElement.WriteTo(writer);
+                }
+                catch (JsonException)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteEndObject();
+                }
+            }
+            else if (fn.TryGetProperty("arguments", out JsonElement rawArgs))
+            {
+                rawArgs.WriteTo(writer);
+            }
+            else
+            {
+                writer.WriteStartObject();
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
     }
 }
