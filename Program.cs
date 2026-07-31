@@ -32,6 +32,7 @@ string? proxyApiKey = Environment.GetEnvironmentVariable("PROXY_API_KEY");
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddSingleton<ProviderHttpClientFactory>();
+builder.Services.AddSingleton<ProviderHealthService>();
 builder.Services.AddSingleton<ProviderRegistry>();
 builder.Services.AddSingleton<ModelSelectionStore>();
 builder.Services.AddSingleton<ModelCatalogService>();
@@ -41,6 +42,8 @@ builder.Services.AddSingleton<OllamaResponseBuilder>();
 builder.Services.AddSingleton<UsageTracker>();
 builder.Services.AddSingleton<ProxyLogger>();
 builder.Services.AddSingleton<ChatStreamingService>();
+builder.Services.AddSingleton<UsageRollupStore>();
+builder.Services.AddSingleton<FreeTierCatalogStore>();
 builder.Services.AddSingleton<UsageTrackerService>();
 builder.Services.AddSingleton<ProviderBillingService>();
 
@@ -50,6 +53,9 @@ builder.Services.AddHostedService<UsageSnapshotService>();
 WebApplication app = builder.Build();
 app.UseUpstreamErrorHandling();
 app.UseOptionalProxyAuthentication(proxyApiKey);
+// Serves wwwroot/: the dashboard markup and the vendored Chart.js. Static-file middleware ships
+// in the Microsoft.AspNetCore.App shared framework, so this adds no package reference.
+app.UseStaticFiles();
 
 ModelCatalogService modelCatalog = app.Services.GetRequiredService<ModelCatalogService>();
 ProviderRegistry providerRegistry = app.Services.GetRequiredService<ProviderRegistry>();
@@ -58,6 +64,7 @@ await modelCatalog.RefreshAvailableModels(CancellationToken.None);
 app.MapOpenAiEndpoints();
 app.MapUsageEndpoints();
 app.MapDashboardEndpoints();
+app.MapFreeTierEndpoints();
 app.MapOllamaEndpoints();
 app.MapHealthEndpoints();
 

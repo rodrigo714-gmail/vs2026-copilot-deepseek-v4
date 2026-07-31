@@ -1,24 +1,28 @@
 # AI Proxy Hub
 
-> The fastest way to run DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, and Ollama Cloud models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
+> The fastest way to run DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Ollama Cloud, Mistral, SiliconFlow and Cloudflare Workers AI models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
 
-**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 370 offline tests
+**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 533 offline tests
 
-A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **11 AI providers**: DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, and Ollama Cloud. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
+A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **14 AI providers**: DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Ollama Cloud, Mistral, SiliconFlow and Cloudflare Workers AI. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
+
+When a provider throttles you or its free quota runs out, the request hops to the next provider that serves the same model — on every chat path, streaming included.
 
 | 🏗️ | Details |
 |---|---|
-| **Providers** | DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux |
+| **Providers** | DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Mistral, SiliconFlow, Cloudflare Workers AI |
 | **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
-| **Tests** | **370 tests**, all offline ✅ |
+| **Tests** | **533 tests**, all offline ✅ |
 | **Deploy** | Docker / bare metal |
 
 ## Key Features
 
 - **🧠 Reasoning Content Caching** — Automatically captures DeepSeek's `reasoning_content` and re-injects it on subsequent messages for true multi-turn reasoning
-- **🌐 Multi-Provider Support (11 providers)** — Route requests to any provider based on model name
+- **🌐 Multi-Provider Support (14 providers)** — Route requests to any provider based on model name
+- **🔁 Quota-aware failover** — Every chat path walks an ordered candidate list. A 429 whose body names a daily or monthly limit stands that provider down until the budget really resets; a bare 429 only backs off for seconds. Cooling providers are demoted, never dropped.
+- **🆓 Free-tier budget tracking** — `config/free-tier/catalog.json` records each provider's published allowance, RPM/RPD limits and terms-of-service verdict; `/api/free-tier/summary` reports allowance, spend and remaining budget. Usage persists in `data/usage-rollup.json` so a *monthly* quota survives a restart.
 - **🔄 Dual API Compatibility**
   - **OpenAI-compatible** (`/v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, any OpenAI SDK
   - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
@@ -32,9 +36,9 @@ A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot a
 - **🔍 Diagnostic Response Headers** — Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, and `X-Proxy-Provider` for debugging routing decisions
 - **⚡ Ultra-Performance** — HTTP/2 connection pooling (256 connections/server), zero-copy streaming, minimal allocations
 - **📦 Zero-Copy Streaming** — SSE pass-through without buffering
-- **🔧 No External Dependencies** — Uses only built-in ASP.NET Core and System.Text.Json
+- **🔧 No External Dependencies** — Uses only built-in ASP.NET Core and System.Text.Json; the `.csproj` has zero `PackageReference` entries
 - **🐳 Docker-Ready** — Multi-stage Dockerfile and docker-compose.yml included
-- **🔐 Optional Authentication** — Set `PROXY_API_KEY` to require Bearer token on all endpoints
+- **🔐 Optional Authentication** — Set `PROXY_API_KEY` to require a Bearer token. The dashboard *page* stays reachable (a browser cannot send a bearer token on a navigation) but its data endpoints do not; set `PROXY_DASHBOARD_PUBLIC=false` to lock the page too.
 
 ## Quick Start
 
@@ -103,17 +107,20 @@ POST /api/show                           # Model details
 POST /api/chat                           # Chat (Ollama format; NDJSON streaming)
 ```
 
-### Dashboard & Billing Endpoints
+### Dashboard, Quota & Billing Endpoints
 
 ```
-GET  /dashboard                         # Real-time usage dashboard (SPA with Chart.js)
+GET  /dashboard                         # Real-time dashboard (static page, Chart.js vendored locally)
 GET  /api/usage                         # Usage stats for all providers (JSON)
 GET  /api/usage/{provider}              # Usage stats for a single provider (JSON)
 GET  /api/billing                       # Billing info for all providers (JSON)
 GET  /api/billing/{provider}            # Billing info for a single provider (JSON)
+GET  /api/free-tier/summary             # Free allowance, spend this month, remaining, per provider
+GET  /api/resilience/cooldowns          # Providers currently standing down + recent failovers
+POST /api/resilience/reset              # Re-enable a provider now (?provider=&model=)
 ```
 
-**[→ Full API Documentation](docs/API.md)**
+**[→ Full API Documentation](API.md)**
 
 ### Diagnostic Response Headers
 
@@ -125,9 +132,14 @@ Every chat completion response includes diagnostic headers to verify routing:
 | `X-Proxy-Resolved-Model` | The resolved internal model id | `deepseek-v4-pro` |
 | `X-Proxy-Upstream-Model` | The model id sent to the upstream API | `deepseek-v4-pro` |
 | `X-Proxy-Provider` | The provider that handled the request | `deepseek`, `ollama`, `zenmux` |
-| `X-Proxy-Candidate-Count` | Number of failover candidates (OpenAI endpoint) | `1`, `3` |
+| `X-Proxy-Candidate-Count` | How many providers could have served this model | `1`, `3` |
+| `X-Proxy-Candidate-Index` | Zero-based position of the provider that answered — non-zero means it failed over | `0`, `1` |
+| `X-Proxy-Attempts` | How many candidates were actually tried | `1`, `2` |
 | `X-Proxy-Primary-Provider` | Primary provider candidate (OpenAI endpoint) | `nvidia` |
 | `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint) | `qwen/qwen3.5-397b-a17b` |
+
+`X-Proxy-Provider` always names the provider that **served** the response, not the one that was
+tried first — so a value that differs from `X-Proxy-Primary-Provider` is a failover you can see.
 
 
 ## Configuration
@@ -178,12 +190,12 @@ Top picks for coding in VS 2026:
 
 ## Documentation
 
-- **[API.md](docs/API.md)** — Complete endpoint reference with examples
-- **[CONFIGURATION.md](docs/CONFIGURATION.md)** — Setup, providers, parameter mapping, context windows
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System design, components, request lifecycle
-- **[TESTING.md](docs/TESTING.md)** — Test architecture, running tests, adding new tests
-- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Docker, Kubernetes, monitoring, troubleshooting
-- **[AGENTS.md](docs/AGENTS.md)** — Quick reference for AI assistants (Copilot, Claude, etc.)
+- **[API.md](API.md)** — Complete endpoint reference with examples
+- **[CONFIGURATION.md](CONFIGURATION.md)** — Setup, providers, parameter mapping, context windows
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — System design, components, request lifecycle
+- **[TESTING.md](TESTING.md)** — Test architecture, running tests, adding new tests
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — Docker, Kubernetes, monitoring, troubleshooting
+- **[AGENTS.md](AGENTS.md)** — Quick reference for AI assistants (Copilot, Claude, etc.)
 
 ## Performance
 
@@ -191,7 +203,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 370 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support
+- **Test coverage:** 533 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support, failure classification, cooldowns and failover
 
 ## Testing
 
@@ -208,7 +220,7 @@ dotnet test --filter ClassName=ProviderModelHintTests
 dotnet test --verbosity detailed
 ```
 
-**[→ Testing Guide](docs/TESTING.md)**
+**[→ Testing Guide](TESTING.md)**
 
 ## How Reasoning Caching Works
 
@@ -243,8 +255,15 @@ Each provider exposes a curated set of enabled models, prioritised for coding.
 | **Cerebras** | 2 | zai-glm-4.7, gpt-oss-120b | Small curated set |
 | **Ollama Cloud** | 10 | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, deepseek-v4-pro | Podio + 1M context GLM/Minimax/Qwen |
 | **ZenMux** | 2 **(free tier)** | **glm-5.2-free 🆓**, **kimi-k2.7-code-free 🆓** | Multi-model aggregator, more models can be enabled in config |
+| **Mistral** | 0 *(ships disabled)* | mistral-large, devstral-medium, codestral | 🆓 largest free pool (~1B tok/mo) but only ~2 RPM — a fallback, not a primary |
+| **SiliconFlow** | 0 *(ships disabled)* | Qwen3-8B, DeepSeek-V3, GLM-4-9B | 🆓 free models capped at 50 req/day without purchased credit |
+| **Cloudflare Workers AI** | 0 *(ships disabled)* | llama-3.3-70b-fp8-fast, qwen2.5-coder-32b | 🆓 10k neurons/day, resets 00:00 UTC. **Requires `PROVIDER_CLOUDFLARE_BASE_URL`** (it embeds your account id) |
 
-**[→ Configuration Guide](docs/CONFIGURATION.md#context-window-specifications)**
+> The three newest providers ship with every model `"enabled": false`. A model listed by
+> `/v1/models` is not proof you are entitled to it — it can still answer 404, 402 or 410. Run
+> `./scripts/test-all-providers.ps1` and enable only what actually responds.
+
+**[→ Configuration Guide](CONFIGURATION.md#context-window-specifications)**
 
 ## Architecture Overview
 
@@ -254,24 +273,25 @@ Clients (Copilot, VS BYOM, Ollama)
 Proxy (localhost:11434)
   ├─ Parameter filtering (RequestTransformer, with override_client_params force-mode)
   ├─ Model routing (ProviderRegistry; 3-level provider/model hint resolution)
+  ├─ Route planning (ResolveRoutePlan → ProviderHealthService demotes cooling providers)
+  ├─ Failover loop (walks candidates; nothing written until an upstream succeeds)
+  ├─ Failure classification (UpstreamFailureClassifier: rate limit vs exhausted quota)
   ├─ Reasoning caching (ReasoningCacheService)
   ├─ Format conversion (OpenAI ↔ Ollama, including image multi-part conversion)
   ├─ Streaming handler (ChatStreamingService)
+  ├─ Usage accounting (UsageTrackerService live + UsageRollupStore durable)
   └─ Diagnostic headers (X-Proxy-*)
     ↓
 Upstream Providers
-  ├─ DeepSeek API
-  ├─ OpenAI API
-  ├─ NVIDIA NIM
-  ├─ Groq API
+  ├─ DeepSeek API          ├─ Moonshot/Kimi API      ├─ Mistral API
+  ├─ OpenAI API            ├─ Cerebras API           ├─ SiliconFlow API
+  ├─ Google Gemini API     ├─ Z.AI API               └─ Cloudflare Workers AI
+  ├─ NVIDIA NIM            ├─ ZenMux API
+  ├─ Groq API              └─ Ollama Cloud API
   ├─ OpenRouter API
-  ├─ Moonshot/Kimi API
-  ├─ Cerebras API
-  ├─ ZenMux API
-  └─ Ollama Cloud API
 ```
 
-**[→ Full Architecture](docs/ARCHITECTURE.md)**
+**[→ Full Architecture](ARCHITECTURE.md)**
 
 ## License
 
@@ -280,6 +300,6 @@ WTFPL (Do What The Fuck You Want To Public License)
 ## Support
 
 For issues, questions, or contributions:
-- Check **[AGENTS.md](docs/AGENTS.md)** for quick reference
-- Review **[TESTING.md](docs/TESTING.md)** for test architecture
-- See **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** for design details
+- Check **[AGENTS.md](AGENTS.md)** for quick reference
+- Review **[TESTING.md](TESTING.md)** for test architecture
+- See **[ARCHITECTURE.md](ARCHITECTURE.md)** for design details

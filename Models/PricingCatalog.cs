@@ -32,6 +32,29 @@ internal static class PricingCatalog
         Register("nvidia","deepseek-ai/deepseek-v4-pro",0,0,null,880,null,null,60,"free");
         Register("nvidia","z-ai/glm-5.1",0,0,null,null,null,null,50,"free");
         Register("cerebras",null,0.10m,0.40m,null,null,null,null,600,"paid","$50/mes Code Pro");
+
+        // ── Provider-level fallbacks (model:* wildcards) ──────────────────────
+        // Folded in from the former PricingCalculator._providerDefaults, which was a second,
+        // parallel pricing table keyed by provider name. It never knew about `zai`, so every
+        // Z.AI request was costed at $0 and the dashboard under-reported spend. Keeping one
+        // table means a provider added to the registry cannot silently price at zero.
+        Register("deepseek",null,1.00m,4.00m,null,null,null,null,null,"paid","provider default");
+        Register("openai",null,5.00m,20.00m,null,null,null,null,null,"paid","provider default");
+        Register("groq",null,0.50m,0.75m,null,null,null,null,null,"paid","provider default");
+        Register("nvidia",null,2.00m,8.00m,null,null,null,null,null,"paid","provider default");
+        Register("openrouter",null,1.00m,4.00m,null,null,null,null,null,"paid","provider default");
+        Register("moonshot",null,1.50m,6.00m,null,null,null,null,null,"paid","provider default");
+        Register("zenmux",null,0.50m,2.00m,null,null,null,null,null,"paid","provider default");
+        Register("google",null,0.50m,2.00m,null,null,null,null,null,"paid","provider default");
+        Register("zai",null,0.60m,2.20m,null,null,null,null,null,"paid","provider default");
+        Register("ollama",null,0,0,null,null,null,null,null,"free","provider default");
+
+        // Free-tier providers. Priced at 0 because their published free allowance is what these
+        // are used for here — but they still need an entry, or EveryRegisteredProvider_HasAPriceFallback
+        // fails and their usage would be silently invisible in the cost report.
+        Register("mistral",null,0,0,null,null,null,null,null,"free","free Experiment tier (~2 RPM)");
+        Register("siliconflow",null,0,0,null,null,null,null,null,"free","free models capped by requests/day");
+        Register("cloudflare",null,0,0,null,null,null,null,null,"free","10k neurons/day, resets 00:00 UTC");
     }
 
     private static void Register(string p, string? m, decimal i, decimal o, decimal? c, int? elo, int? wd, decimal? awr, int? tps, string tier = "paid", string? notes = null)
@@ -40,6 +63,11 @@ internal static class PricingCatalog
         _pricing[k] = new ModelPricing(p, m, i, o, c, elo, wd, awr, tps, tier, notes ?? "");
     }
 
+    /// <summary>
+    /// Resolves pricing: exact <c>provider:model</c>, then the provider's <c>provider:*</c>
+    /// fallback, then — only for providers with no fallback registered — a cross-provider
+    /// match on the model name alone.
+    /// </summary>
     internal static ModelPricing? Get(string provider, string model)
     {
         if (_pricing.TryGetValue($"{provider}:{model}", out var x)) return x;
@@ -47,6 +75,26 @@ internal static class PricingCatalog
         foreach (var kv in _pricing)
             if (kv.Key.EndsWith($":{model}", StringComparison.OrdinalIgnoreCase)) return kv.Value;
         return null;
+    }
+
+    /// <summary>
+    /// Estimated cost in USD for a completion. Returns 0 when the model/provider pair has no
+    /// registered price — an unknown price is reported as unknown, never guessed.
+    /// </summary>
+    /// <remarks>
+    /// Note the argument order: <paramref name="provider"/> first, matching <see cref="Get"/>.
+    /// The <c>PricingCalculator.CalculateCost</c> this replaces took <c>(model, provider)</c>.
+    /// </remarks>
+    internal static double EstimateCostUsd(string provider, string model, long promptTokens, long completionTokens)
+    {
+        ModelPricing? pricing = Get(provider, model);
+        if (pricing is null) return 0;
+
+        ModelPricing p = pricing.Value;
+        if (p.Tier == "free") return 0;
+
+        return (promptTokens / 1_000_000.0) * (double)p.InputPerMillion
+             + (completionTokens / 1_000_000.0) * (double)p.OutputPerMillion;
     }
 
     internal static IEnumerable<ModelPricing> All => _pricing.Values;

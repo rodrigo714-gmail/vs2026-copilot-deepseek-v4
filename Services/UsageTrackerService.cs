@@ -8,6 +8,15 @@ using System.Text.Json;
 /// </summary>
 internal sealed class UsageTrackerService
 {
+    /// <summary>
+    /// Optional durable mirror of the in-memory counters. Everything in this class resets on
+    /// restart, which is fine for latency and RPM but useless for a monthly quota — so the
+    /// per-day aggregate is also written here.
+    /// </summary>
+    private readonly UsageRollupStore? _rollup;
+
+    public UsageTrackerService(UsageRollupStore? rollup = null) => _rollup = rollup;
+
     private readonly ConcurrentDictionary<string, ProviderUsageStats> _stats = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<UsageSnapshot> _snapshots = new();
     private readonly TimeSpan _snapshotRetention = TimeSpan.FromHours(24);
@@ -63,16 +72,19 @@ internal sealed class UsageTrackerService
             }
         }
 
+        _rollup?.RecordRequest(providerName, promptTokens, completionTokens, estimatedCostUsd);
+
         TryTakeSnapshot();
     }
 
     /// <summary>
     /// Records a failed request (upstream error).
     /// </summary>
-    internal void RecordError(string providerName, string? errorMessage, string? statusCode = null, long latencyMs = 0)
+    internal void RecordError(string providerName, string? errorMessage, string? statusCode = null, long latencyMs = 0, UpstreamFailureKind kind = UpstreamFailureKind.None)
     {
         var stats = _stats.GetOrAdd(providerName, _ => new ProviderUsageStats(providerName));
         DateTime now = DateTime.UtcNow;
+        _rollup?.RecordFailure(providerName, kind);
 
         lock (stats.Lock)
         {
@@ -147,7 +159,7 @@ internal sealed class UsageTrackerService
                     providers.Add(new ProviderStatsEntry
                     {
                         Name = name,
-                        DisplayName = FormatDisplayName(name),
+                        DisplayName = ProviderCapabilitiesRegistry.DisplayName(name),
                         Stats = stats.Clone()
                     });
                 }
@@ -232,24 +244,6 @@ internal sealed class UsageTrackerService
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
-
-    private static string FormatDisplayName(string raw)
-    {
-        return raw switch
-        {
-            "deepseek" => "DeepSeek",
-            "openai" => "OpenAI",
-            "nvidia" => "NVIDIA NIM",
-            "groq" => "Groq",
-            "openrouter" => "OpenRouter",
-            "moonshot" => "Kimi/Moonshot",
-            "cerebras" => "Cerebras",
-            "zenmux" => "ZenMux",
-            "ollama" => "Ollama Cloud",
-            "google" => "Google Gemini",
-            _ => char.ToUpper(raw[0]) + raw[1..]
-        };
-    }
 
     private static void ParseRateLimitHeaders(ProviderUsageStats stats, Dictionary<string, string?> headers)
     {

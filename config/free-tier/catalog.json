@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "curated_at": "2026-07-31",
+  "_comment": "Free-tier allowances per provider. These are UPPER BOUNDS taken from each provider's published limits on the date above; free tiers change constantly, so re-verify before relying on a figure. For a GitHub Copilot workload the binding limit is usually requests_per_minute or requests_per_day, NOT the headline token pool — Mistral is the clearest example, with ~1B tokens/month behind roughly 2 requests/minute. 'tos' records whether the provider's terms are comfortable with a self-hosted personal proxy: many free tiers restrict proxy or relay use, and that is a real cost of a free tier that belongs next to the quota rather than buried. Informational, not legal advice.",
+
+  "free_types": {
+    "recurring-daily": "Resets every day. Counted as daily_tokens x days-in-month for the monthly headline.",
+    "recurring-monthly": "Resets every calendar month.",
+    "recurring-uncapped": "Permanently free but no published token cap (rate/concurrency limited). Listed, never summed — extrapolating a rate limit to 24/7 produces a fantasy number.",
+    "one-time-credit": "A signup credit that does not recur. Kept in a separate total so it never inflates the steady figure.",
+    "none": "No free tier; the provider is pay-as-you-go."
+  },
+
+  "providers": [
+    {
+      "provider": "mistral",
+      "pool_key": "mistral-free",
+      "free_type": "recurring-monthly",
+      "monthly_tokens": 1000000000,
+      "requests_per_minute": 2,
+      "tos": "caution",
+      "tos_note": "The consumer terms scope API use to personal needs and restrict making keys available to third parties. Fine for a single-user proxy; read them if you share the instance.",
+      "signup_url": "https://console.mistral.ai",
+      "source_url": "https://docs.mistral.ai/deployment/laplateforme/tier/",
+      "verified_at": "2026-07-31",
+      "notes": "Largest free token pool of any provider, but ~2 RPM makes it a fallback for chat rather than a primary for completions."
+    },
+    {
+      "provider": "groq",
+      "pool_key": "groq-free",
+      "free_type": "recurring-daily",
+      "daily_tokens": 500000,
+      "requests_per_minute": 30,
+      "tos": "caution",
+      "tos_note": "The services agreement prohibits reselling or redistributing API access. Personal single-user use is the ordinary reading.",
+      "signup_url": "https://console.groq.com",
+      "verified_at": "2026-07-31",
+      "notes": "Per-model daily token budgets; exhaustion arrives as a 429 naming the daily limit and its UTC reset."
+    },
+    {
+      "provider": "cerebras",
+      "pool_key": "cerebras-free",
+      "free_type": "recurring-daily",
+      "daily_tokens": 1000000,
+      "requests_per_minute": 5,
+      "tos": "caution",
+      "signup_url": "https://cloud.cerebras.ai",
+      "verified_at": "2026-07-31",
+      "notes": "Very fast inference; the 5 RPM ceiling is the practical limit, not the token budget."
+    },
+    {
+      "provider": "google",
+      "pool_key": "gemini-flash-free",
+      "free_type": "recurring-daily",
+      "daily_tokens": 2000000,
+      "requests_per_minute": 15,
+      "tos": "caution",
+      "tos_note": "The free tier is scoped to developers building with Google AI models.",
+      "signup_url": "https://aistudio.google.com",
+      "verified_at": "2026-07-31",
+      "notes": "The Flash family shares ONE pool — counting each variant separately is the mistake that inflates these numbers several-fold."
+    },
+    {
+      "provider": "cloudflare",
+      "pool_key": "cloudflare-free",
+      "free_type": "recurring-daily",
+      "daily_tokens": 1000000,
+      "requests_per_day": 300,
+      "tos": "caution",
+      "tos_note": "The self-serve terms restrict using the service to provide a proxy to others. A personal instance is the ordinary reading.",
+      "signup_url": "https://dash.cloudflare.com",
+      "verified_at": "2026-07-31",
+      "notes": "Budget is 10,000 neurons/day, not tokens: roughly 200-400 requests on a small model and far fewer on a large one. Resets at UTC midnight."
+    },
+    {
+      "provider": "ollama",
+      "pool_key": "ollama-cloud-free",
+      "free_type": "recurring-daily",
+      "daily_tokens": 700000,
+      "tos": "ambiguous",
+      "tos_note": "Prohibits building competing products; no explicit position on a self-hosted personal proxy.",
+      "signup_url": "https://ollama.com",
+      "verified_at": "2026-07-31"
+    },
+    {
+      "provider": "openrouter",
+      "pool_key": "openrouter-free",
+      "free_type": "recurring-daily",
+      "requests_per_day": 50,
+      "tos": "caution",
+      "tos_note": "Prohibits reselling API access or building a competing service.",
+      "signup_url": "https://openrouter.ai",
+      "verified_at": "2026-07-31",
+      "notes": "Only :free-suffixed models. A one-time $10 lifetime top-up raises the free allowance from 50 to 1000 requests/day — reported separately because it is not a recurring grant."
+    },
+    {
+      "provider": "siliconflow",
+      "pool_key": "siliconflow-free",
+      "free_type": "recurring-uncapped",
+      "requests_per_day": 50,
+      "requests_per_minute": 30,
+      "tos": "caution",
+      "tos_note": "The terms prohibit making the service available to third parties or reselling it.",
+      "signup_url": "https://siliconflow.com",
+      "verified_at": "2026-07-31",
+      "notes": "No published token cap on the free models, so it is listed but never summed. 50 requests/day without purchased credit, ~1000/day with. The .cn platform requires a Chinese phone number."
+    },
+    {
+      "provider": "nvidia",
+      "pool_key": "nvidia-nim-free",
+      "free_type": "recurring-uncapped",
+      "requests_per_minute": 40,
+      "tos": "caution",
+      "tos_note": "The free tier is explicitly for prototyping, development, research and evaluation — not for serving real end users.",
+      "signup_url": "https://build.nvidia.com",
+      "verified_at": "2026-07-31",
+      "notes": "Rate-limited with no published token cap, so listed and not summed."
+    },
+    {
+      "provider": "zai",
+      "pool_key": "zai-flash-free",
+      "free_type": "recurring-uncapped",
+      "tos": "caution",
+      "signup_url": "https://z.ai",
+      "verified_at": "2026-07-31",
+      "notes": "The GLM Flash models are permanently free with no published token cap."
+    },
+    {
+      "provider": "deepseek",
+      "pool_key": "deepseek-signup",
+      "free_type": "one-time-credit",
+      "credit_tokens": 5000000,
+      "tos": "ok",
+      "tos_note": "The open platform terms permit broad use including derivative product development.",
+      "signup_url": "https://platform.deepseek.com",
+      "verified_at": "2026-07-31",
+      "notes": "Signup credit only — it does not recur, so it is excluded from the steady monthly figure."
+    },
+    {
+      "provider": "openai",
+      "free_type": "none",
+      "tos": "ok",
+      "signup_url": "https://platform.openai.com",
+      "verified_at": "2026-07-31"
+    },
+    {
+      "provider": "moonshot",
+      "free_type": "none",
+      "tos": "caution",
+      "signup_url": "https://platform.moonshot.ai",
+      "verified_at": "2026-07-31"
+    },
+    {
+      "provider": "zenmux",
+      "free_type": "none",
+      "tos": "caution",
+      "signup_url": "https://zenmux.ai",
+      "verified_at": "2026-07-31"
+    }
+  ]
+}

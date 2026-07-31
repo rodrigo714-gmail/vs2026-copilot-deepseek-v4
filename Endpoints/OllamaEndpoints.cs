@@ -145,7 +145,9 @@ internal static class OllamaEndpoints
             ChatStreamingService chatStreaming,
             ReasoningCacheService reasoningCache,
             RequestTransformer requestTransformer,
-            UsageTrackerService usageTracker) =>
+            UsageTrackerService usageTracker,
+            ProxyLogger proxyLogger,
+            ProviderHealthService providerHealth) =>
         {
             CancellationToken ct = ctx.RequestAborted;
             await modelCatalog.RefreshAvailableModelsIfNeeded(ct);
@@ -164,191 +166,294 @@ internal static class OllamaEndpoints
             string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
             Console.WriteLine($"[ROUTE] Resolved model='{ollamaEffectiveModel}'");
 
-            string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
-            Console.WriteLine($"[ROUTE] Upstream model='{ollamaUpstreamModel}'");
+            // ── Candidate list, not a single provider ─────────────────────
+            // This endpoint is the Visual Studio 2026 BYOM path. It used to call
+            // ResolveProvider() and commit to one provider, so an exhausted quota or a dead
+            // key surfaced to the IDE as a hard failure with ten other providers sitting idle.
+            IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> ollamaCandidates =
+                providerRegistry.ResolveRoutePlan(ollamaEffectiveModel);
+            Console.WriteLine($"[ROUTE] Candidates={ollamaCandidates.Count} [{string.Join(", ", ollamaCandidates.Select(c => $"{c.Provider.Name}:{c.UpstreamModel}"))}]");
 
-            ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
-            Console.WriteLine($"[ROUTE] Provider='{ollamaProvider.Name}' BaseUrl='{ollamaProvider.Client.BaseAddress}' ChatPath='{ollamaProvider.Capabilities.ChatPath}'");
-
-            ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
+            if (ollamaCandidates.Count == 0)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync("""{"error":"no provider candidate available","code":"NO_CANDIDATE"}""", ct);
+                return;
+            }
 
             // ── Diagnostic headers ───────────────────────────────────────
+            // Provider and upstream model are set per candidate, immediately before the
+            // response body is written, so they always name the provider that actually served.
             ctx.Response.Headers["X-Proxy-Requested-Model"] = ollamaRequestedModel;
             ctx.Response.Headers["X-Proxy-Resolved-Model"] = ollamaEffectiveModel;
-            ctx.Response.Headers["X-Proxy-Upstream-Model"] = ollamaUpstreamModel;
-            ctx.Response.Headers["X-Proxy-Provider"] = ollamaProvider.Name;
+            ctx.Response.Headers["X-Proxy-Candidate-Count"] = ollamaCandidates.Count.ToString();
 
             using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(ollamaEffectiveModel, ct);
             CancellationToken ollamaCt = ollamaTimeoutCts?.Token ?? ct;
 
-            // ── Ollama Cloud / Native Ollama passthrough ──────────────────
-            if (ollamaProvider.Capabilities.ApiFormat == ApiFormat.Ollama)
+            OllamaDispatchResult lastResult = default;
+            int attempts = 0;
+            for (int i = 0; i < ollamaCandidates.Count; i++)
             {
-                string upstreamBody = ReplaceModelInOllamaRequestBody(body, ollamaUpstreamModel);
+                (ProviderInfo candidate, string candidateUpstream) = ollamaCandidates[i];
+                attempts++;
+                proxyLogger.LogRequest(candidate.Name, ollamaEffectiveModel, i + 1, ollamaCandidates.Count);
 
-                var sw = System.Diagnostics.Stopwatch.StartNew();
+                OllamaDispatchResult result = await TryDispatchOllamaChat(
+                    ctx, candidate, candidateUpstream, ollamaEffectiveModel, body, isStream, i,
+                    chatStreaming, reasoningCache, requestTransformer, usageTracker, ollamaCt, ct);
 
-                if (!isStream)
+                if (result.Outcome == DispatchOutcome.Succeeded)
                 {
-                    using StringContent ollamaContent = new(upstreamBody, Encoding.UTF8, "application/json");
-                    using HttpResponseMessage ollamaResp = await ollamaProvider.Client.SendAsync(
-                        new HttpRequestMessage(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = ollamaContent }, ollamaCt);
-                    sw.Stop();
-                    string ollamaRespBody = await ollamaResp.Content.ReadAsStringAsync(ct);
-                    // Fallback: copy `thinking` into `content` for reasoning models that leave content empty.
-                    ollamaRespBody = EnsureOllamaContentFromThinking(ollamaRespBody);
-                    ctx.Response.StatusCode = (int)ollamaResp.StatusCode;
-                    ctx.Response.ContentType = "application/json";
-                    await ctx.Response.WriteAsync(ollamaRespBody, ct);
-
-                    // Track usage for Ollama Cloud response
-                    RecordOllamaUsage(usageTracker, ollamaProvider.Name, ollamaRespBody, ollamaResp.Headers, ollamaResp.TrailingHeaders, sw.ElapsedMilliseconds, ollamaEffectiveModel);
+                    providerHealth.RecordSuccess(candidate.Name, ollamaEffectiveModel);
                     return;
                 }
 
-                ctx.Response.StatusCode = 200;
-                ctx.Response.ContentType = "application/x-ndjson";
-                ctx.Response.Headers["X-Accel-Buffering"] = "no";
+                lastResult = result;
+                providerHealth.RecordFailure(candidate.Name, ollamaEffectiveModel, result.Failure);
 
-                using StringContent ollamaStreamContent = new(upstreamBody, Encoding.UTF8, "application/json");
-                using HttpRequestMessage ollamaStreamReq = new(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = ollamaStreamContent };
-                using HttpResponseMessage ollamaStreamResp = await ollamaProvider.Client.SendAsync(
-                    ollamaStreamReq, HttpCompletionOption.ResponseHeadersRead, ollamaCt);
-                sw.Stop();
+                // A malformed request fails identically everywhere — burning the remaining
+                // candidates just delays the same error by several seconds.
+                if (result.Outcome == DispatchOutcome.FailedTerminal)
+                    break;
 
-                if (!ollamaStreamResp.IsSuccessStatusCode)
+                if (i < ollamaCandidates.Count - 1)
                 {
-                    string errBody = await ollamaStreamResp.Content.ReadAsStringAsync(ct);
-                    ctx.Response.StatusCode = (int)ollamaStreamResp.StatusCode;
-                    ctx.Response.ContentType = "application/json";
-                    await ctx.Response.WriteAsync(errBody, ct);
-
-                    usageTracker.RecordError(ollamaProvider.Name, $"HTTP {(int)ollamaStreamResp.StatusCode}", ((int)ollamaStreamResp.StatusCode).ToString(), sw.ElapsedMilliseconds);
-                    return;
+                    proxyLogger.LogFailover(candidate.Name, ollamaEffectiveModel, result.StatusCode, result.LatencyMs);
+                    providerHealth.RecordFailover(candidate.Name, ollamaCandidates[i + 1].Provider.Name,
+                        ollamaEffectiveModel, result.StatusCode, result.Failure.Kind, result.LatencyMs);
                 }
-
-                // Track request + rate-limit headers for streaming
-                double cost = PricingCalculator.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
-                usageTracker.RecordRequest(ollamaProvider.Name, 0, 0, 0, null, sw.ElapsedMilliseconds, cost);
-                RecordOllamaRateLimitHeaders(usageTracker, ollamaProvider.Name, ollamaStreamResp.Headers, ollamaStreamResp.TrailingHeaders);
-                await chatStreaming.StreamNdjsonPassthrough(ollamaStreamResp, ctx.Response, ct);
-                return;
             }
 
-            // ── Convert Ollama → OpenAI request ──────────────────────────
-            string openAiBody = ConvertOllamaToOpenAi(body, ollamaUpstreamModel, isStream);
+            // Report the last real upstream status and body. Collapsing this into a synthetic
+            // 502 would hide what the provider actually said, which is the only clue the user
+            // has about why their model stopped answering.
+            ctx.Response.StatusCode = lastResult.StatusCode > 0 ? lastResult.StatusCode : StatusCodes.Status502BadGateway;
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.Headers["X-Proxy-Attempts"] = attempts.ToString();
+            await ctx.Response.WriteAsync(
+                string.IsNullOrEmpty(lastResult.ErrorBody)
+                    ? """{"error":"all provider candidates failed","code":"ALL_CANDIDATES_FAILED"}"""
+                    : lastResult.ErrorBody,
+                ct);
+        });
+
+        return app;
+    }
+
+    // ── Failover dispatch ────────────────────────────────────────────────────
+
+    private enum DispatchOutcome
+    {
+        /// <summary>The response was written to the client. No further candidate may be tried.</summary>
+        Succeeded,
+
+        /// <summary>This provider failed but nothing was written — the next candidate may be tried.</summary>
+        FailedRetryable,
+
+        /// <summary>The request itself is bad; every other candidate would fail the same way.</summary>
+        FailedTerminal
+    }
+
+    private readonly record struct OllamaDispatchResult(
+        DispatchOutcome Outcome, int StatusCode, string? ErrorBody, UpstreamFailure Failure, long LatencyMs);
+
+    /// <summary>
+    /// Sends one candidate's request and, only if the upstream answered successfully, writes the
+    /// response to the client.
+    ///
+    /// The invariant that makes failover safe: nothing is written to <paramref name="ctx"/> until
+    /// the upstream status is known to be successful. Assigning <c>Response.StatusCode</c> or
+    /// headers does not commit the response in ASP.NET Core — only a write or an explicit flush
+    /// does — so a failed candidate leaves the response untouched and the caller can try the next.
+    /// Once streaming begins, bytes are on the wire and no failover is possible.
+    /// </summary>
+    private static async Task<OllamaDispatchResult> TryDispatchOllamaChat(
+        HttpContext ctx,
+        ProviderInfo provider,
+        string upstreamModel,
+        string effectiveModel,
+        string originalBody,
+        bool isStream,
+        int candidateIndex,
+        ChatStreamingService chatStreaming,
+        ReasoningCacheService reasoningCache,
+        RequestTransformer requestTransformer,
+        UsageTrackerService usageTracker,
+        CancellationToken providerCt,
+        CancellationToken ct)
+    {
+        bool nativeOllama = provider.Capabilities.ApiFormat == ApiFormat.Ollama;
+
+        // The body is rebuilt per candidate: each provider has its own upstream model id and its
+        // own parameter filtering (top_k, reasoning_effort, max_completion_tokens, Moonshot's
+        // forced temperature). Reusing the first candidate's body would break the second.
+        string requestBody;
+        if (nativeOllama)
+        {
+            requestBody = ReplaceModelInOllamaRequestBody(originalBody, upstreamModel);
+        }
+        else
+        {
+            requestBody = ConvertOllamaToOpenAi(originalBody, upstreamModel, isStream);
             try
             {
-                using JsonDocument openAiDoc = JsonDocument.Parse(openAiBody);
+                using JsonDocument openAiDoc = JsonDocument.Parse(requestBody);
                 string? modifiedRequest = requestTransformer.ModifyRequest(openAiDoc);
                 if (modifiedRequest is not null)
-                    openAiBody = modifiedRequest;
+                    requestBody = modifiedRequest;
             }
             catch
             {
                 // Keep original request body if pre-sanitization parsing fails.
             }
+            requestBody = requestTransformer.ApplyExecutionDefaults(requestBody, effectiveModel, provider.Capabilities);
+        }
 
-            // Apply execution defaults with provider-aware parameter filtering
-            openAiBody = requestTransformer.ApplyExecutionDefaults(openAiBody, ollamaEffectiveModel, ollamaProvider.Capabilities);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
-            using StringContent reqContent = new(openAiBody, Encoding.UTF8, "application/json");
-            var sw2 = System.Diagnostics.Stopwatch.StartNew();
+        using StringContent content = new(requestBody, Encoding.UTF8, "application/json");
+        using HttpRequestMessage upstreamReq = new(HttpMethod.Post, provider.Capabilities.ChatPath) { Content = content };
+        if (isStream && !nativeOllama)
+            upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-            if (!isStream)
-            {
-                using HttpResponseMessage resp = await ollamaProvider.Client.SendAsync(
-                    new HttpRequestMessage(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath) { Content = reqContent }, ollamaCt);
-                sw2.Stop();
-                string respBody = await resp.Content.ReadAsStringAsync(ct);
+        using HttpResponseMessage upstream = await provider.Client.SendAsync(
+            upstreamReq,
+            isStream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead,
+            providerCt);
+        sw.Stop();
 
-                if (!resp.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' HTTP={(int)resp.StatusCode} Body='{respBody}'");
-                    ctx.Response.StatusCode = (int)resp.StatusCode;
-                    ctx.Response.ContentType = "application/json";
-                    await ctx.Response.WriteAsync(respBody, ct);
+        if (!upstream.IsSuccessStatusCode)
+        {
+            string errBody = await upstream.Content.ReadAsStringAsync(ct);
+            UpstreamFailure failure = UpstreamFailureClassifier.Classify(
+                (int)upstream.StatusCode, CollectResponseHeaders(upstream), errBody);
 
-                    usageTracker.RecordError(ollamaProvider.Name, $"HTTP {(int)resp.StatusCode}", ((int)resp.StatusCode).ToString(), sw2.ElapsedMilliseconds);
-                    return;
-                }
+            Console.WriteLine($"[ERROR] Provider='{provider.Name}' Upstream='{upstreamModel}' HTTP={(int)upstream.StatusCode} Kind={failure.Kind} Latency={sw.ElapsedMilliseconds}ms Body='{Truncate(errBody, 500)}'");
+            usageTracker.RecordError(provider.Name, $"HTTP {(int)upstream.StatusCode}", ((int)upstream.StatusCode).ToString(), sw.ElapsedMilliseconds);
 
-                reasoningCache.CacheReasoningFromResponse(respBody);
-                // Track usage from the OpenAI-format response
-                RecordOllamaOpenAiUsage(usageTracker, ollamaProvider.Name, respBody, resp.Headers, resp.TrailingHeaders, sw2.ElapsedMilliseconds, ollamaEffectiveModel);
+            return new OllamaDispatchResult(
+                UpstreamFailureClassifier.ShouldFailover(failure) ? DispatchOutcome.FailedRetryable : DispatchOutcome.FailedTerminal,
+                (int)upstream.StatusCode, errBody, failure, sw.ElapsedMilliseconds);
+        }
 
-                // A 200 with a body we can't read as an OpenAI completion must not become an
-                // opaque 502 from an unhandled exception — report it with the upstream body.
-                if (!TryExtractAssistantMessage(respBody, out JsonElement msg, out string assistantContent))
-                {
-                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' returned an unparseable completion: '{respBody[..Math.Min(respBody.Length, 500)]}'");
-                    ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
-                    ctx.Response.ContentType = "application/json";
-                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
-                    {
-                        error = $"Provider '{ollamaProvider.Name}' returned a response the proxy could not parse as an OpenAI completion.",
-                        upstream_body = respBody[..Math.Min(respBody.Length, 2000)]
-                    }, JsonDefaults.SnakeCase), ct);
-                    usageTracker.RecordError(ollamaProvider.Name, "Unparseable completion", "502", sw2.ElapsedMilliseconds);
-                    return;
-                }
-
-                Dictionary<string, object?> ollamaResp = new()
-                {
-                    ["model"] = ollamaEffectiveModel,
-                    ["created_at"] = DateTime.UtcNow.ToString("o"),
-                    ["message"] = new Dictionary<string, object?>
-                    {
-                        ["role"] = "assistant",
-                        ["content"] = assistantContent
-                    },
-                    ["done"] = true,
-                    ["done_reason"] = "stop"
-                };
-                if (msg.ValueKind == JsonValueKind.Object && msg.TryGetProperty("tool_calls", out JsonElement tcs))
-                    ((Dictionary<string, object?>)ollamaResp["message"]!)["tool_calls"] = tcs;
-
-                ctx.Response.ContentType = "application/json";
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ollamaResp, JsonDefaults.SnakeCase), ct);
-            }
-            else
-            {
-                ctx.Response.StatusCode = 200;
-                ctx.Response.ContentType = "application/x-ndjson";
-                ctx.Response.Headers["X-Accel-Buffering"] = "no";
-
-                using HttpRequestMessage upstreamReq = new(HttpMethod.Post, ollamaProvider.Capabilities.ChatPath)
-                {
-                    Content = reqContent
-                };
-                upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-
-                using HttpResponseMessage upstreamResp = await ollamaProvider.Client.SendAsync(
-                    upstreamReq, HttpCompletionOption.ResponseHeadersRead, ollamaCt);
-                sw2.Stop();
-
-                if (!upstreamResp.IsSuccessStatusCode)
-                {
-                    string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
-                    Console.WriteLine($"[ERROR] Provider='{ollamaProvider.Name}' (stream) HTTP={(int)upstreamResp.StatusCode} Body='{errBody}'");
-                    ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
-                    ctx.Response.ContentType = "application/json";
-                    await ctx.Response.WriteAsync(errBody, ct);
-
-                    usageTracker.RecordError(ollamaProvider.Name, $"HTTP {(int)upstreamResp.StatusCode}", ((int)upstreamResp.StatusCode).ToString(), sw2.ElapsedMilliseconds);
-                    return;
-                }
-
-                // Track request + rate-limit headers for streaming Ollama→OpenAI
-                double cost = PricingCalculator.CalculateCost(ollamaEffectiveModel, ollamaProvider.Name, 0, 0);
-                usageTracker.RecordRequest(ollamaProvider.Name, 0, 0, 0, null, sw2.ElapsedMilliseconds, cost);
-                RecordOllamaRateLimitHeaders(usageTracker, ollamaProvider.Name, upstreamResp.Headers, upstreamResp.TrailingHeaders);
-                await chatStreaming.StreamOllamaAndCache(upstreamResp, ctx.Response, ollamaEffectiveModel, ct);
-            }
-        });
-
-        return app;
+        return nativeOllama
+            ? await WriteNativeOllamaResponse(ctx, provider, upstream, upstreamModel, effectiveModel, isStream, candidateIndex, chatStreaming, usageTracker, sw.ElapsedMilliseconds, ct)
+            : await WriteConvertedOpenAiResponse(ctx, provider, upstream, upstreamModel, effectiveModel, isStream, candidateIndex, chatStreaming, reasoningCache, usageTracker, sw.ElapsedMilliseconds, ct);
     }
+
+    /// <summary>Forwards an Ollama-native upstream response (NDJSON stream or single JSON object).</summary>
+    private static async Task<OllamaDispatchResult> WriteNativeOllamaResponse(
+        HttpContext ctx, ProviderInfo provider, HttpResponseMessage upstream,
+        string upstreamModel, string effectiveModel, bool isStream, int candidateIndex,
+        ChatStreamingService chatStreaming, UsageTrackerService usageTracker, long latencyMs, CancellationToken ct)
+    {
+        if (!isStream)
+        {
+            string respBody = await upstream.Content.ReadAsStringAsync(ct);
+            // Fallback: copy `thinking` into `content` for reasoning models that leave content empty.
+            respBody = EnsureOllamaContentFromThinking(respBody);
+
+            StampWinningProvider(ctx, provider, upstreamModel, candidateIndex);
+            ctx.Response.StatusCode = (int)upstream.StatusCode;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsync(respBody, ct);
+
+            RecordOllamaUsage(usageTracker, provider.Name, respBody, upstream.Headers, upstream.TrailingHeaders, latencyMs, effectiveModel);
+            return Served(latencyMs);
+        }
+
+        StampWinningProvider(ctx, provider, upstreamModel, candidateIndex);
+        ctx.Response.StatusCode = 200;
+        ctx.Response.ContentType = "application/x-ndjson";
+        ctx.Response.Headers["X-Accel-Buffering"] = "no";
+
+        double cost = PricingCatalog.EstimateCostUsd(provider.Name, effectiveModel, 0, 0);
+        usageTracker.RecordRequest(provider.Name, 0, 0, 0, null, latencyMs, cost);
+        RecordOllamaRateLimitHeaders(usageTracker, provider.Name, upstream.Headers, upstream.TrailingHeaders);
+
+        await chatStreaming.StreamNdjsonPassthrough(upstream, ctx.Response, ct);
+        return Served(latencyMs);
+    }
+
+    /// <summary>Converts an OpenAI-format upstream response into the Ollama shape the client expects.</summary>
+    private static async Task<OllamaDispatchResult> WriteConvertedOpenAiResponse(
+        HttpContext ctx, ProviderInfo provider, HttpResponseMessage upstream,
+        string upstreamModel, string effectiveModel, bool isStream, int candidateIndex,
+        ChatStreamingService chatStreaming, ReasoningCacheService reasoningCache,
+        UsageTrackerService usageTracker, long latencyMs, CancellationToken ct)
+    {
+        if (isStream)
+        {
+            StampWinningProvider(ctx, provider, upstreamModel, candidateIndex);
+            ctx.Response.StatusCode = 200;
+            ctx.Response.ContentType = "application/x-ndjson";
+            ctx.Response.Headers["X-Accel-Buffering"] = "no";
+
+            double streamCost = PricingCatalog.EstimateCostUsd(provider.Name, effectiveModel, 0, 0);
+            usageTracker.RecordRequest(provider.Name, 0, 0, 0, null, latencyMs, streamCost);
+            RecordOllamaRateLimitHeaders(usageTracker, provider.Name, upstream.Headers, upstream.TrailingHeaders);
+
+            await chatStreaming.StreamOllamaAndCache(upstream, ctx.Response, effectiveModel, ct);
+            return Served(latencyMs);
+        }
+
+        string respBody = await upstream.Content.ReadAsStringAsync(ct);
+        reasoningCache.CacheReasoningFromResponse(respBody);
+        RecordOllamaOpenAiUsage(usageTracker, provider.Name, respBody, upstream.Headers, upstream.TrailingHeaders, latencyMs, effectiveModel);
+
+        // A 200 whose body is not an OpenAI completion is this provider's problem, not the
+        // request's — another candidate may well answer properly, so this is retryable rather
+        // than an immediate 502.
+        if (!TryExtractAssistantMessage(respBody, out JsonElement msg, out string assistantContent))
+        {
+            Console.WriteLine($"[ERROR] Provider='{provider.Name}' returned an unparseable completion: '{Truncate(respBody, 500)}'");
+            usageTracker.RecordError(provider.Name, "Unparseable completion", "502", latencyMs);
+
+            string errorJson = JsonSerializer.Serialize(new
+            {
+                error = $"Provider '{provider.Name}' returned a response the proxy could not parse as an OpenAI completion.",
+                upstream_body = Truncate(respBody, 2000)
+            }, JsonDefaults.SnakeCase);
+
+            return new OllamaDispatchResult(
+                DispatchOutcome.FailedRetryable, StatusCodes.Status502BadGateway, errorJson,
+                new UpstreamFailure(UpstreamFailureKind.Transient, StatusCodes.Status502BadGateway, null, QuotaPeriod.None, "unparseable-completion"),
+                latencyMs);
+        }
+
+        Dictionary<string, object?> ollamaResp = new()
+        {
+            ["model"] = effectiveModel,
+            ["created_at"] = DateTime.UtcNow.ToString("o"),
+            ["message"] = new Dictionary<string, object?>
+            {
+                ["role"] = "assistant",
+                ["content"] = assistantContent
+            },
+            ["done"] = true,
+            ["done_reason"] = "stop"
+        };
+        if (msg.ValueKind == JsonValueKind.Object && msg.TryGetProperty("tool_calls", out JsonElement tcs))
+            ((Dictionary<string, object?>)ollamaResp["message"]!)["tool_calls"] = tcs;
+
+        StampWinningProvider(ctx, provider, upstreamModel, candidateIndex);
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync(JsonSerializer.Serialize(ollamaResp, JsonDefaults.SnakeCase), ct);
+        return Served(latencyMs);
+    }
+
+    private static OllamaDispatchResult Served(long latencyMs) =>
+        new(DispatchOutcome.Succeeded, StatusCodes.Status200OK, null, UpstreamFailure.Success, latencyMs);
+
+    private static void StampWinningProvider(HttpContext ctx, ProviderInfo provider, string upstreamModel, int candidateIndex) =>
+        ProxyDiagnostics.StampWinningProvider(ctx, provider, upstreamModel, candidateIndex);
+
+    private static Dictionary<string, string?> CollectResponseHeaders(HttpResponseMessage response) =>
+        ProxyDiagnostics.CollectResponseHeaders(response);
+
+    private static string Truncate(string value, int max) => ProxyDiagnostics.Truncate(value, max);
 
     /// <summary>
     /// Extracts <c>choices[0].message</c> from an OpenAI-format completion.
@@ -593,7 +698,7 @@ internal static class OllamaEndpoints
         }
         catch { }
 
-        double cost = (promptTokens > 0 || completionTokens > 0) ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        double cost = (promptTokens > 0 || completionTokens > 0) ? PricingCatalog.EstimateCostUsd(providerName, model, promptTokens, completionTokens) : 0;
         usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
     }
 
@@ -631,7 +736,7 @@ internal static class OllamaEndpoints
         }
         catch { }
 
-        double cost = hasUsage ? PricingCalculator.CalculateCost(model, providerName, promptTokens, completionTokens) : 0;
+        double cost = hasUsage ? PricingCatalog.EstimateCostUsd(providerName, model, promptTokens, completionTokens) : 0;
         usageTracker.RecordRequest(providerName, promptTokens, completionTokens, totalTokens, headers, latencyMs, cost);
     }
 

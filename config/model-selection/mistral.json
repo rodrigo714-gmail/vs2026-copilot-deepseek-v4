@@ -1,0 +1,91 @@
+{
+  "provider": "mistral",
+  "_comment": "Mistral La Plateforme free 'Experiment' tier: the largest documented free token pool of any provider (~1B tokens/month) but rate-limited to a couple of requests per minute, so it belongs in the failover chain rather than as a primary for completions. Codestral/Devstral are billed separately from the free tier on some plans — check your console before enabling them. Every entry ships DISABLED: per CLAUDE.md a model appearing in /v1/models is not proof it is entitled. Run ./scripts/test-all-providers.ps1 and enable only what answers a real request.",
+  "models": [
+    {
+      "_comment": "Verify with ./scripts/test-all-providers.ps1, then set enabled=true.",
+      "match": "mistral-large-latest",
+      "priority": 1,
+      "enabled": false,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "mistral",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "_comment": "Coding-tuned. Check whether your plan bills Devstral outside the free tier before enabling.",
+      "match": "devstral-medium-latest",
+      "priority": 2,
+      "enabled": false,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "mistral",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "_comment": "Fill-in-the-middle / completion model. Same billing caveat as Devstral.",
+      "match": "codestral-latest",
+      "priority": 3,
+      "enabled": false,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "mistral",
+        "temperature": 0.1,
+        "top_p": 0.9,
+        "max_tokens": 8192,
+        "timeout_seconds": 90
+      }
+    },
+    {
+      "_comment": "Reasoning model. reasoning_effort is not supported by Mistral, so it is not set here.",
+      "match": "magistral-medium-latest",
+      "priority": 4,
+      "enabled": false,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 40960,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "mistral",
+        "temperature": 0.3,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    },
+    {
+      "_comment": "Cheapest/fastest of the family — a good last-resort fallback.",
+      "match": "mistral-small-latest",
+      "priority": 5,
+      "enabled": false,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "mistral",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "timeout_seconds": 60
+      }
+    }
+  ]
+}

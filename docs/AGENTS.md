@@ -4,7 +4,7 @@ Optimized documentation for GitHub Copilot, Claude, and other AI code assistants
 
 ## Project Essence
 
-**Multi-Provider AI Proxy** — Single HTTP gateway to DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Ollama Cloud, **Moonshot/Kimi**, **Cerebras**, and **ZenMux**.
+**Multi-Provider AI Proxy** — Single HTTP gateway to DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Ollama Cloud, **Moonshot/Kimi**, **Cerebras**, **Z.AI**, **ZenMux**, and the free-tier trio **Mistral**, **SiliconFlow**, **Cloudflare Workers AI** — 14 in total.
 
 - **Dual API Support:** OpenAI-compatible (`/v1/*`) + Ollama-compatible (`/api/*`)
 - **Smart Routing:** Model names auto-map to providers with intelligent fallback (3-level `provider/model` hint resolution). `/api/tags` now emits qualified aliases (`model@provider:latest`) for correct provider routing.
@@ -14,7 +14,9 @@ Optimized documentation for GitHub Copilot, Claude, and other AI code assistants
 - **🖼️ Vision & Image Passthrough:** Multi-part image content is converted between OpenAI and Ollama formats automatically
 - **Zero-Copy Streaming:** SSE pass-through with minimal allocations
 - **Reasoning Cache:** DeepSeek multi-turn thinking content reuse
-- **Production Ready:** HTTP/2, connection pooling, **336-test** suite
+- **Quota-Aware Failover:** Every chat path walks an ordered candidate list, streaming included. `UpstreamFailureClassifier` splits a transient 429 from an exhausted daily/monthly budget; `ProviderHealthService` stands the provider down for a matching length and demotes it in the routing order (never removes it).
+- **Free-Tier Budgets:** `config/free-tier/catalog.json` + `/api/free-tier/summary` report allowance, spend and remaining budget. Usage persists in `data/usage-rollup.json` so a monthly quota survives a restart.
+- **Production Ready:** HTTP/2, connection pooling, **533-test** suite, zero NuGet dependencies
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated models are selected for coding strength.
 
@@ -85,7 +87,9 @@ POST /api/chat                     → Chat completion (Ollama format; NDJSON st
 | `X-Proxy-Resolved-Model` | Both | Internal resolved model id |
 | `X-Proxy-Upstream-Model` | Both | Model sent to upstream API |
 | `X-Proxy-Provider` | Both | Provider that handled the request |
-| `X-Proxy-Candidate-Count` | `/v1/*` | Number of failover candidates |
+| `X-Proxy-Candidate-Count` | Both | How many providers could have served this model |
+| `X-Proxy-Candidate-Index` | Both | Position of the provider that answered; non-zero means it failed over |
+| `X-Proxy-Attempts` | Both | How many candidates were actually tried |
 | `X-Proxy-Primary-Provider` | `/v1/*` | Primary candidate provider |
 | `X-Proxy-Primary-Upstream` | `/v1/*` | Primary upstream model |
 
@@ -262,10 +266,30 @@ JsonElement (incoming)
   ↓ [ModelSelectionStore] Load defaults for requested model
 JsonElement + defaults
   ↓ [RequestTransformer] Apply execution defaults + provider-specific filtering
-  ↓ [ProviderRegistry] ResolveCandidates() → ordered failover list
-  ↓ [Forward] Send to upstream API
+  ↓ [ProviderRegistry] ResolveRoutePlan() → candidates, cooling providers demoted
+  ↓ [Failover loop] For each candidate, until one succeeds:
+  ↓     [Forward] Send to upstream API (nothing written to the client yet)
+  ↓     [UpstreamFailureClassifier] On failure: rate limit? quota gone? bad request?
+  ↓     [ProviderHealthService] Record it; a 400 stops the walk, everything else continues
   ↓ [OllamaResponseBuilder] If Ollama endpoint, convert OpenAI → Ollama
-  ↓ [Diagnostic headers] X-Proxy-* added to response
+  ↓ [Diagnostic headers] X-Proxy-* added, naming the provider that SERVED
+```
+
+### Failover rules in one screen
+
+```
+429 + "daily limit" in body  → QuotaExhausted → cool until local midnight  → try next
+429 bare                     → RateLimit      → 5s * 2^n, capped at 5 min   → try next
+413 + "rate_limit_exceeded"  → RateLimit      (Groq reports over-TPM as 413) → try next
+402                          → QuotaExhausted → 6h, credits refill on top-up → try next
+401 / 403                    → Auth           → 15 min                       → try next
+404 / 410                    → ModelUnavailable → 30 min, THAT MODEL only     → try next
+408 / 5xx                    → Transient      → nothing until 3 in a row     → try next
+400 / 413 / 422 (genuine)    → BadRequest     → no cooldown                   → STOP
+
+An upstream Retry-After always wins. A success halves the failure count and clears at zero.
+Order() demotes cooling providers but NEVER returns an empty list.
+A "model@provider" pin is a single candidate: no failover, no reordering.
 ```
 
 ### Provider/Model Hint Resolution (3-level)
@@ -287,14 +311,14 @@ User sends model = "nvidia/qwen3.5-397b-a17b"
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **JSON parsing:** `System.Text.Json` source-generated (no reflection)
 - **Typical latency:** <10ms proxy overhead
-- **Test count:** 336 tests, all green
+- **Test count:** 533 tests, all green (1 skipped)
 
 ---
 
 ## Related Docs
 
-- **[API.md](docs/API.md)** — Endpoint specifications and examples
-- **[CONFIGURATION.md](docs/CONFIGURATION.md)** — Setup, providers, parameter mapping
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System design, components, data flow
-- **[TESTING.md](docs/TESTING.md)** — Test architecture, running tests, adding new tests
-- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Docker, bare metal, monitoring, troubleshooting
+- **[API.md](API.md)** — Endpoint specifications and examples
+- **[CONFIGURATION.md](CONFIGURATION.md)** — Setup, providers, parameter mapping
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — System design, components, data flow
+- **[TESTING.md](TESTING.md)** — Test architecture, running tests, adding new tests
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — Docker, bare metal, monitoring, troubleshooting

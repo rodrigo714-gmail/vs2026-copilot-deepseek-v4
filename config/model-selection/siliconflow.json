@@ -1,0 +1,57 @@
+{
+  "provider": "siliconflow",
+  "_comment": "SiliconFlow keeps a handful of smaller open-source models permanently free. The binding limit is REQUESTS PER DAY, not tokens: 50/day on an account with no purchased credit, ~1000/day once at least 10 credits have been bought. Note the international platform is siliconflow.com; the .cn platform requires a Chinese phone number to register. Every entry ships DISABLED — the free roster rotates, so run ./scripts/test-all-providers.ps1 and enable only what answers.",
+  "models": [
+    {
+      "_comment": "Verify against the live /v1/models list before enabling — SiliconFlow rotates its free roster.",
+      "match": "Qwen/Qwen3-8B",
+      "priority": 1,
+      "enabled": false,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "qwen",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 4096,
+        "timeout_seconds": 90
+      }
+    },
+    {
+      "_comment": "Verify against the live /v1/models list before enabling.",
+      "match": "deepseek-ai/DeepSeek-V3",
+      "priority": 2,
+      "enabled": false,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "deepseek",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "timeout_seconds": 120
+      }
+    },
+    {
+      "_comment": "Verify against the live /v1/models list before enabling.",
+      "match": "THUDM/GLM-4-9B-0414",
+      "priority": 3,
+      "enabled": false,
+      "execution": {
+        "context_length": 32768,
+        "max_output_tokens": 8192,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "glm",
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "max_tokens": 4096,
+        "timeout_seconds": 90
+      }
+    }
+  ]
+}

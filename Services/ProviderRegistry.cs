@@ -5,8 +5,17 @@ internal sealed class ProviderRegistry
     private Dictionary<string, string> _modelToUpstream = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, List<ProviderInfo>> _upstreamToProviders = new(StringComparer.OrdinalIgnoreCase);
 
-    public ProviderRegistry(ProviderHttpClientFactory httpClientFactory)
+    private readonly ProviderHealthService? _health;
+
+    /// <param name="health">
+    /// Optional so the many tests that construct a bare registry keep compiling. The DI container
+    /// picks the widest constructor it can satisfy, so the registered singleton is injected in
+    /// production and only <see cref="ResolveRoutePlan"/> — never <see cref="ResolveCandidates"/> —
+    /// consults it.
+    /// </param>
+    public ProviderRegistry(ProviderHttpClientFactory httpClientFactory, ProviderHealthService? health = null)
     {
+        _health = health;
         DefaultModel = Environment.GetEnvironmentVariable("DEEPSEEK_MODEL") ?? "deepseek-v4-pro";
         DiscoverProviders(httpClientFactory);
 
@@ -350,6 +359,30 @@ internal sealed class ProviderRegistry
         return [(ResolveProvider(resolved), upstream)];
     }
 
+    /// <summary>
+    /// The candidate list an endpoint should actually dispatch against: <see cref="ResolveCandidates"/>
+    /// reordered so providers currently in cooldown are tried last.
+    /// </summary>
+    /// <remarks>
+    /// Health lives here rather than inside <see cref="ResolveCandidates"/> on purpose.
+    /// <c>ResolveCandidates</c> is pure, deterministic and heavily tested, and
+    /// <c>ProviderBenchmarkService</c> depends on that purity — it specifically wants to probe
+    /// providers that are cooling down, which is how they get re-discovered as healthy.
+    ///
+    /// An explicit <c>model@provider</c> pin resolves to a single candidate; reordering one
+    /// element is a no-op, so a pinned request still goes exactly where the user asked, cooldown
+    /// or not. Answering an explicit pick from a different provider would be worse than an
+    /// honest error.
+    /// </remarks>
+    internal IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> ResolveRoutePlan(string? requestedModel)
+    {
+        IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> candidates = ResolveCandidates(requestedModel);
+        if (_health is null || candidates.Count <= 1)
+            return candidates;
+
+        return _health.Order(candidates, ResolveModel(requestedModel));
+    }
+
     private void DiscoverProviders(ProviderHttpClientFactory httpClientFactory)
     {
         foreach (string providerName in ProviderCapabilitiesRegistry.KnownProviders)
@@ -373,6 +406,17 @@ internal sealed class ProviderRegistry
             }
 
             string? configuredBaseUrl = Environment.GetEnvironmentVariable($"PROVIDER_{prefix}_BASE_URL");
+
+            // Some providers have no usable default URL because it embeds an account id
+            // (Cloudflare). Registering one with the placeholder would send every request to a
+            // host that cannot answer, so skip it and say why.
+            if (caps.RequiresExplicitBaseUrl && string.IsNullOrWhiteSpace(configuredBaseUrl))
+            {
+                Console.WriteLine($"[CONFIG] Provider '{providerName}' has an API key but no PROVIDER_{prefix}_BASE_URL. " +
+                                  $"Its base URL contains an account id and has no default, so it was not registered.");
+                continue;
+            }
+
             string baseUrl = string.IsNullOrWhiteSpace(configuredBaseUrl)
                 ? caps.DefaultBaseUrl
                 : configuredBaseUrl;

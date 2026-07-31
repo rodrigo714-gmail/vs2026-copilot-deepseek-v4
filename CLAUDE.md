@@ -18,7 +18,7 @@ solution are all named `ai-proxy-hub`. Older names (`vs2026-copilot-deepseek-v4`
 # Build
 dotnet build
 
-# Run all tests (370 tests, xUnit + WebApplicationFactory, fully offline)
+# Run all tests (533 tests, xUnit + WebApplicationFactory, fully offline)
 dotnet test
 
 # Run specific test suite
@@ -56,7 +56,11 @@ A high-performance ASP.NET Core **minimal API proxy** that bridges GitHub Copilo
 | OpenAI-compatible | `/v1/*` | Copilot, Cursor, Continue.dev, OpenAI SDKs |
 | Ollama-compatible | `/api/*` | VS 2026 BYOM, native Ollama clients |
 
-**Supported providers (11):** DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux.
+**Supported providers (14):** DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud,
+Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Mistral, SiliconFlow, Cloudflare Workers AI.
+
+The last three are free-tier oriented and ship with every model `"enabled": false` until verified
+live — see *Free-tier quotas* below.
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated model configs are optimised for this workload.
 
@@ -78,14 +82,26 @@ RequestTransformer         →  Injects defaults + filters unsupported params pe
                               honours override_client_params=true force-mode
 OllamaResponseBuilder      →  Converts OpenAI JSON response → Ollama NDJSON format
 ChatStreamingService       →  Handles SSE streaming + on-the-fly format conversion
+ProviderHealthService      →  Cooldowns after quota/rate-limit failures; reorders candidates
+UsageRollupStore           →  Durable per-day, per-provider token rollup (data/usage-rollup.json)
+FreeTierCatalogStore       →  Loads config/free-tier/catalog.json (allowances, ToS verdicts)
+UsageTrackerService        →  Per-provider live stats (tokens, latency, RPM, rate-limit headers)
+UsageTracker               →  Per provider:model stats behind /usage
+ProviderBillingService     →  Live balance probes (DeepSeek, OpenAI, OpenRouter); 5-min cache
+ProxyLogger                →  Structured console/file logging incl. [FAILOVER] markers
 ProviderBenchmarkService   →  Background HostedService monitoring provider health
+UsageSnapshotService       →  Background HostedService: 60s snapshots + rollup flush
 ```
 
 ### Endpoint Structure
 
 - `Endpoints/OpenAiEndpoints.cs` — Maps `/v1/models`, `/v1/chat/completions`
 - `Endpoints/OllamaEndpoints.cs` — Maps `/api/version`, `/api/tags`, `/api/show`, `/api/chat`
-- `Endpoints/HealthEndpoints.cs` — Maps `/health`
+- `Endpoints/HealthEndpoints.cs` — Maps `/health`, `/api/resilience/cooldowns`, `/api/resilience/reset`
+- `Endpoints/DashboardEndpoints.cs` — Maps `/api/usage`, `/api/billing`, `/dashboard`
+- `Endpoints/FreeTierEndpoints.cs` — Maps `/api/free-tier/summary`
+- `Endpoints/UsageEndpoints.cs` — Maps `/usage`, `/usage/summary`, `/usage/pricing`, `/usage/reset`
+- `Endpoints/ResponsesEndpoints.cs` — **dead code**: `MapResponsesEndpoints` is never called from `Program.cs`
 - `Middleware/` — Empty (auth middleware lives in `Infrastructure/ProxyAuthenticationMiddleware.cs`)
 
 ### Request Lifecycle
@@ -96,11 +112,11 @@ ProviderBenchmarkService   →  Background HostedService monitoring provider hea
 4. **Provider resolved** → `ProviderRegistry.ResolveCandidates(model)` returns ordered list of providers to try
 5. **Forward to upstream** → via `ChatStreamingService` (streaming) or direct HTTP (non-streaming)
 6. **Response converted** → if Ollama endpoint, `OllamaResponseBuilder` maps OpenAI → Ollama format
-7. **Failover** → non-streaming requests retry next candidate on failure; streaming does NOT failover (headers already sent)
+7. **Failover** → every chat path retries the next candidate, streaming included. See *Failover and quota awareness*.
 
 ### Model Configuration
 
-Model metadata lives in `config/model-selection/{provider}.json` (11 files: `deepseek`, `openai`, `google`, `nvidia`, `groq`, `openrouter`, `moonshot`, `cerebras`, `zai`, `ollama`, `zenmux`). The filename is cosmetic — the `"provider"` field inside is what binds the file to a provider, and **exactly one file may declare a given provider**. Each file maps model names to execution defaults:
+Model metadata lives in `config/model-selection/{provider}.json` (14 files: `deepseek`, `openai`, `google`, `nvidia`, `groq`, `openrouter`, `moonshot`, `cerebras`, `zai`, `ollama`, `zenmux`, `mistral`, `siliconflow`, `cloudflare`). The filename is cosmetic — the `"provider"` field inside is what binds the file to a provider, and **exactly one file may declare a given provider**. Each file maps model names to execution defaults:
 
 ```json
 {
@@ -217,6 +233,97 @@ chat path (`chat/completions`, no `v1/` prefix). `ProviderHttpClientFactory` app
 slash to every base URL, without which `HttpClient` would resolve the relative path against the
 last path segment and silently drop `/v4`.
 
+### Failover and quota awareness
+
+Every chat path resolves an **ordered candidate list** and walks it — `/v1/chat/completions`
+(streaming and not) and `/api/chat` (streaming and not). Nothing is written to the client until an
+upstream answers successfully, which is what makes retrying safe; once one byte reaches the client
+there is no failover, ever.
+
+`Infrastructure/UpstreamFailureClassifier.cs` decides what a failure *means*, because the status
+code alone does not say:
+
+| Status | Kind | Next candidate? |
+|---|---|---|
+| 429 + quota wording in the body | `QuotaExhausted` | yes |
+| 429 bare | `RateLimit` | yes |
+| 402 | `QuotaExhausted` (credit) | yes |
+| 401 / 403 | `Auth` (or `QuotaExhausted` if the body says so) | yes |
+| 404 / 410 | `ModelUnavailable` | yes |
+| 408 / 5xx | `Transient` | yes |
+| 400 / 413 / 422 | `BadRequest` | **no** |
+
+Two traps the classifier exists to avoid:
+
+- **A bare 429 is never treated as an exhausted quota.** Only an explicit keyword
+  (`daily limit`, `monthly quota`, `out of credits`, Cloudflare's `daily free allocation`, …)
+  promotes it, because standing a healthy provider down until midnight over a one-minute blip is
+  far worse than retrying.
+- **Groq reports an over-TPM request as HTTP 413**, with `rate_limit_exceeded` in the body. Read
+  literally that is a malformed request and the router would give up with ten providers idle, so a
+  4xx carrying rate-limit wording is reclassified as `RateLimit`. A genuinely oversized body still
+  fails fast.
+
+`Services/ProviderHealthService.cs` then stands the provider down for a length that matches the
+failure: until local midnight for a daily quota, until the 1st for a monthly one, 6h for a spent
+credit balance, exponential seconds for a rate limit, 15 min for bad credentials. An upstream
+`Retry-After` always wins over anything computed locally. A success **halves** the failure count
+and clears the entry at zero, so a provider that recovered early is not still being punished.
+
+Ordering **degrades, it never excludes**: `ResolveRoutePlan` moves cooling providers to the back of
+the list but never drops them, because with fourteen providers a bad hour can cool them all and a
+last-ditch attempt beats a hard error. `ResolveCandidates` stays pure — `ProviderBenchmarkService`
+depends on that, since it specifically wants to probe cooling providers.
+
+Diagnostic headers: `X-Proxy-Provider` and `X-Proxy-Candidate-Index` name the provider that
+actually **served**; `X-Proxy-Attempts` reports how many candidates were burned.
+
+`FailoverTests.cs` covers this end to end against two scriptable stubs
+(`FakeProviders/ScriptedProviderStub.cs`), including that a 400 burns exactly one candidate and a
+`model@provider` pin never fails over.
+
+### Free-tier quotas and persistent usage
+
+`config/free-tier/catalog.json` records each provider's published free allowance, its cadence, its
+RPM/RPD limits and a **ToS verdict** (`ok`/`caution`/`ambiguous`/`avoid`/`unknown`) — many free
+tiers restrict proxy or relay use, and that cost belongs next to the quota, not buried. It is data,
+not C#, so a figure can be re-verified without a rebuild.
+
+Two accounting rules keep the headline honest:
+
+- **Shared pools count once.** Providers serving several variants from one budget share a
+  `pool_key`; summing the variants would multiply the same allowance several-fold.
+- **Uncapped tiers are listed, never summed.** A permanently-free provider that publishes only a
+  rate limit has real value that cannot be expressed as tokens/month; `RPM × 24/7` is a fantasy.
+
+`Services/UsageRollupStore.cs` keeps a per-day, per-provider aggregate in
+`${PROXY_DATA_DIR:-<base>/data}/usage-rollup.json` — atomic write, 400-day retention, flushed every
+60 s and on shutdown — so a **monthly** budget still means something after a restart. An unwritable
+directory degrades to memory-only with a warning; a corrupt file starts empty rather than failing
+startup. Deliberately a JSON rollup and not SQLite: a few thousand rows with one writer does not
+justify the project's first native dependency.
+
+`GET /api/free-tier/summary` returns allowance, usage and any active cooldown in one payload, which
+is what lets the dashboard render a coherent quota panel from a single fetch.
+
+> **For the Copilot workload the binding limit is usually RPM/RPD, not the token pool.** Mistral is
+> the clearest case: the largest free pool of any provider (~1B tokens/month) behind roughly 2
+> requests/minute, which makes it a fallback for chat rather than a primary for completions.
+
+### Dashboard
+
+`GET /dashboard` serves `wwwroot/dashboard.html`, with Chart.js vendored at
+`wwwroot/vendor/chart.umd.min.js` (it used to load from a CDN, so the page broke offline).
+`app.UseStaticFiles()` serves both — static-file middleware ships in the shared framework, so this
+adds no package reference.
+
+When `PROXY_API_KEY` is set, a browser cannot attach a bearer token to a navigation, so
+`/dashboard`, `/vendor/` and `/health` are exempt (disable with `PROXY_DASHBOARD_PUBLIC=false`).
+**The data endpoints are not exempt** — `/api/usage`, `/api/billing`, `/api/free-tier` and
+`/api/resilience` expose spend, quota and key metadata. The page reads the key from `?key=` or
+`localStorage` and sends it as `X-Proxy-Key`. Prefix matching is path-boundary aware, so
+`/dashboard-secret` still returns 401.
+
 ### Upstream error handling
 
 `UpstreamErrorMiddleware` maps transport failures to responses a client can act on:
@@ -241,7 +348,7 @@ Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
 - Tests that construct a `ProviderRegistry` or otherwise touch process env vars MUST be in `[Collection("Proxy")]` — `ProxyFixture` boots `Program.cs`, which loads the developer's real `.env` into the process, so anything running in parallel with it races
 - Those tests must also use `ProviderEnvScope`, which clears every `PROVIDER_*` variable derived from `ProviderCapabilitiesRegistry` and restores them on dispose. Never hand-write the list: a forgotten provider picks up a real API key from `.env` and quietly changes collision resolution
-- **370 tests** across 15 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
+- **533 tests** across 21 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, `override_client_params` semantics, `provider/model` hint resolution, and Ollama NDJSON streaming
 
 ## Credential Separation
 
@@ -265,7 +372,13 @@ Per `.github/copilot-instructions.md`: **Never confuse Ollama Cloud API keys wit
 | `Models/ProviderInfo.cs` | record struct `(Name, ApiKey, BaseUrl, Client, Capabilities)` |
 | `Infrastructure/ProxyAuthenticationMiddleware.cs` | Optional bearer token auth |
 | `Infrastructure/UpstreamErrorMiddleware.cs` | Transport failures → 502/504 JSON instead of empty 500 |
-| `config/model-selection/` | Per-provider model JSON configs (11 files) |
+| `Infrastructure/UpstreamFailureClassifier.cs` | Classifies upstream failures; splits rate-limit from exhausted quota |
+| `Services/ProviderHealthService.cs` | Cooldowns, success-decay recovery, candidate reordering |
+| `Services/UsageRollupStore.cs` | Durable per-day usage rollup (survives restarts) |
+| `Services/FreeTierCatalogStore.cs` | Free-tier allowances, pool dedup, ToS verdicts |
+| `config/model-selection/` | Per-provider model JSON configs (14 files) |
+| `config/free-tier/catalog.json` | Free-tier allowances and ToS verdicts per provider |
+| `wwwroot/dashboard.html` | Dashboard markup (served by `/dashboard`) |
 | `scripts/test-all-providers.ps1` | Live end-to-end smoke test of every published model |
 
 Further detail is available in `docs/ARCHITECTURE.md`, `docs/AGENTS.md`, `docs/API.md`, `docs/CONFIGURATION.md`, `docs/TESTING.md`, and `docs/DEPLOYMENT.md`.
