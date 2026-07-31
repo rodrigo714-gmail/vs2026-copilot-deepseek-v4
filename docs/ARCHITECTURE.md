@@ -54,7 +54,7 @@ The proxy is a high-performance ASP.NET Core minimal API application that bridge
 - **Web Framework:** ASP.NET Core Minimal APIs (`WebApplication.CreateSlimBuilder`)
 - **Serialization:** System.Text.Json
 - **HTTP Client:** `SocketsHttpHandler` with 256 connections/server + HTTP/2 multiplexing
-- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **551 tests** in 22 test files
+- **Testing:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing` — **557 tests** in 23 test files
 - **Dependencies:** none. The `.csproj` has zero `PackageReference` entries; everything used ships in the shared framework.
 
 ---
@@ -197,15 +197,15 @@ Client (Stream complete)
 ```
 Client (Visual Studio BYOM)
     ├─> POST /api/chat
-    │   { "model": "z-ai/glm-5.2-free@zenmux:latest", "messages": [...], "stream": false }
+    │   { "model": "z-ai/glm-5.2@nvidia:latest", "messages": [...], "stream": false }
     ▼
 OllamaEndpoints.cs
-    ├─> ProviderRegistry.ResolveModel("z-ai/glm-5.2-free@zenmux:latest")
-    │   → StripTagSuffix: "z-ai/glm-5.2-free@zenmux"
-    │   → Contains '@' → exact match: "z-ai/glm-5.2-free@zenmux" → provider: "zenmux"
+    ├─> ProviderRegistry.ResolveModel("z-ai/glm-5.2@nvidia:latest")
+    │   → StripTagSuffix: "z-ai/glm-5.2@nvidia"
+    │   → Contains '@' → exact match: "z-ai/glm-5.2@nvidia" → provider: "nvidia"
     ├─> RequestTransformer.ApplyExecutionDefaults(...)
     ├─> Convert Ollama → OpenAI format (including image conversion)
-    ├─> Forward to https://zenmux.ai/api/v1/chat/completions
+    ├─> Forward to https://integrate.api.nvidia.com/v1/chat/completions
     ├─> Receive OpenAI response
     ├─> OllamaResponseBuilder: Convert to Ollama NDJSON
     └─> Response + X-Proxy-* diagnostic headers
@@ -274,9 +274,8 @@ The proxy supports vision models that accept image inputs. Image conversion happ
 The `override_client_params` field on `ModelExecutionConfig` is a boolean. When `true`, `RequestTransformer.ApplyExecutionDefaults()` overwrites client-supplied values for `temperature`, `top_p`, `max_tokens`, and `reasoning_effort` with the configured value.
 
 Currently enabled for:
-- Moonshot `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5` (mandates `temperature=1.0`)
-- Ollama Cloud `kimi2.7-code`, `kimi-k2.6`
-- ZenMux `kimi-k2.7-code-free`, `kimi-k2.6`
+- Moonshot `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `kimi-k2.6` (Kimi K2.x mandates `temperature=1.0`)
+- Ollama Cloud `kimi-k2.7-code` (same rule)
 
 ---
 

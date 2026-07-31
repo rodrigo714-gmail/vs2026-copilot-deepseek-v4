@@ -16,7 +16,7 @@ Optimized documentation for GitHub Copilot, Claude, and other AI code assistants
 - **Reasoning Cache:** DeepSeek multi-turn thinking content reuse
 - **Quota-Aware Failover:** Every chat path walks an ordered candidate list, streaming included. `UpstreamFailureClassifier` splits a transient 429 from an exhausted daily/monthly budget; `ProviderHealthService` stands the provider down for a matching length and demotes it in the routing order (never removes it).
 - **Free-Tier Budgets:** `config/free-tier/catalog.json` + `/api/free-tier/summary` report allowance, spend and remaining budget. Usage persists in `data/usage-rollup.json` so a monthly quota survives a restart.
-- **Production Ready:** HTTP/2, connection pooling, **551-test** suite, zero NuGet dependencies
+- **Production Ready:** HTTP/2, connection pooling, **557-test** suite, zero NuGet dependencies
 
 **Primary use case:** GitHub Copilot inside Visual Studio 2026 producing code completions and code chat. All curated models are selected for coding strength.
 
@@ -102,14 +102,16 @@ Each provider exposes enabled models optimised for **GitHub Copilot inside Visua
 | Provider | Top picks | Notes |
 |----------|-----------|-------|
 | **DeepSeek** | `deepseek-v4-pro`, `deepseek-v4-flash` | 2 enabled |
-| **OpenAI** | `gpt-5`, `gpt-5-mini`, `gpt-4.1`, `gpt-4o`, `gpt-oss-120b` | 5 enabled |
-| **NVIDIA NIM** | `qwen/qwen3-coder-480b-a35b-instruct`, `moonshotai/kimi-k2.6`, `nvidia/nemotron-3-super-120b-a12b`, `openai/gpt-oss-120b`, `qwen/qwen3.5-397b-a17b` | 5 enabled |
-| **Groq** | `llama-3.3-70b-versatile`, `qwen/qwen3-32b`, `meta-llama/llama-4-scout-17b-16e-instruct`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b` | 5 enabled |
-| **OpenRouter** | `qwen/qwen3.7-plus`, `qwen/qwen3-coder`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-3-ultra-550b-a55b`, `moonshotai/kimi-k2.7-code`, `deepseek/deepseek-v4-pro` | 6 enabled |
-| **Moonshot/Kimi** | `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`, `moonshot-v1-128k`, `moonshot-v1-auto` | 5 enabled; K2.x have `override_client_params=true` (forces `temperature=1.0`) |
+| **OpenAI** | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `o4-mini` | 4 enabled; GPT-5.x/o-series use `max_completion_tokens` and reject explicit temperature |
+| **Google** | `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gemini-3-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite`, `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite` | 8 enabled; free-tier daily quota (429s recover at midnight PT) |
+| **NVIDIA NIM** | `nvidia/nemotron-3-super-120b-a12b`, `z-ai/glm-5.2`, `deepseek-ai/deepseek-v4-pro`, `openai/gpt-oss-120b`, `nvidia/nemotron-3-ultra-550b-a55b`, `minimaxai/minimax-m3`, `nvidia/llama-3.3-nemotron-super-49b-v1.5`, `meta/llama-3.3-70b-instruct` | 8 enabled; free tier queues some models past their timeout |
+| **Groq** | `qwen/qwen3.6-27b`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `groq/compound`, `groq/compound-mini` | 7 enabled; compound models run server-side tools only (`supports_tools=false`) |
+| **OpenRouter** | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.4`, `google/gemini-3.5-flash`, `deepseek/deepseek-v4-pro`, `qwen/qwen3.7-plus`, `qwen/qwen3-coder`, `moonshotai/kimi-k2.7-code`, `moonshotai/kimi-k2.6`, `x-ai/grok-4.3`, `nvidia/nemotron-3-super-120b-a12b` | 10 enabled |
+| **Moonshot/Kimi** | `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `kimi-k2.6`, `moonshot-v1-128k`, `moonshot-v1-auto`, `moonshot-v1-32k` | 6 enabled; K2.x have `override_client_params=true` (forces `temperature=1.0`) |
 | **Cerebras** | `zai-glm-4.7`, `gpt-oss-120b` | 2 enabled |
-| **Ollama Cloud** | `kimi2.7-code`, `glm-5.2`, `minimax-m3`, `qwen3-coder:480b`, `qwen3-coder-next`, `devstral-2:123b`, `kimi-k2.6`, `deepseek-v4-pro`, `glm-5.1`, `deepseek-v4-flash`, `nemotron-3-ultra` | 10 enabled |
-| **ZenMux** 🆕 | **`glm-5.2-free` (free 🆓)**, **`kimi-k2.7-code-free` (free, vision, reasoning 🆓)** | 2 enabled (free tier only) |
+| **Z.AI** | `glm-5.2`, `glm-5.1`, `glm-4.7`, `glm-4.7-flash`, `glm-4.7-flashx` | 5 enabled; only `glm-4.7-flash` is free — the rest need account balance |
+| **Ollama Cloud** | `kimi-k2.7-code`, `glm-5.2`, `deepseek-v4-pro`, `minimax-m3`, `nemotron-3-ultra`, `nemotron-3-super`, `glm-5.1`, `deepseek-v4-flash`, `gpt-oss:120b` | 9 enabled |
+| **ZenMux** | *(whole roster disabled 2026-07-31: every model answered HTTP 402 `reject_no_credit` — top up at zenmux.ai and re-enable in `zenmux.json`)* | 0 enabled |
 
 ---
 
@@ -133,7 +135,7 @@ Each provider exposes enabled models optimised for **GitHub Copilot inside Visua
    }
    ```
    For models with hard requirements (e.g. `temperature=1.0` is non-negotiable), set
-   `"override_client_params": true` in the `execution` block — see Moonshot Kimi K2.x and ZenMux kimi-k2.7-code-free entries.
+   `"override_client_params": true` in the `execution` block — see the Moonshot and Ollama Cloud Kimi K2.x entries.
 
 2. **Update provider routing:** If new provider, add entry to `ProviderCapabilitiesRegistry.cs` + create `config/model-selection/{provider}.json` (no other code changes needed — routing reads from registry).
 3. **Restart proxy** (configuration is not reloaded on-the-fly)
@@ -145,7 +147,7 @@ Check the diagnostic headers on any response:
 ```bash
 curl -s -D - -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"model":"glm-5.2-free","messages":[{"role":"user","content":"hi"}],"stream":false}' \
+  -d '{"model":"glm-5.2","messages":[{"role":"user","content":"hi"}],"stream":false}' \
   | head -20
 ```
 Look for `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Provider`.
@@ -195,15 +197,20 @@ Look for `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Provider`
 
 ```
 config/model-selection/
-├── deepseek.json       # v4-pro, v4-flash
-├── openai.json         # gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b
-├── nvidia.json         # qwen3-coder-480b, kimi-k2.6, nemotron-3-super, gpt-oss-120b, qwen3.5-397b
-├── groq.json           # llama-3.3-70b, qwen3-32b, llama-4-scout, gpt-oss-120b, gpt-oss-20b
-├── openrouter.json     # qwen3-coder, nemotron, kimi-k2.6, deepseek-v4-pro
-├── moonshot.json       # kimi-k2.6, kimi-k2.5, moonshot-v1-*
+├── deepseek.json       # deepseek-v4-pro, deepseek-v4-flash
+├── openai.json         # gpt-5.5, gpt-5.4, gpt-5.4-mini, o4-mini
+├── google.json         # gemini-3.5/3.1/3 flash & pro, gemini-2.5-*
+├── nvidia.json         # nemotron-3-super/ultra, glm-5.2, deepseek-v4-pro, gpt-oss-120b, minimax-m3, llama-3.3-*
+├── groq.json           # qwen3.6-27b, gpt-oss-120b/20b, llama-3.3-70b, llama-3.1-8b, compound(-mini)
+├── openrouter.json     # claude-sonnet-4.6, gpt-5.4, gemini-3.5-flash, kimi-k2.7/k2.6, grok-4.3, qwen3.7-plus, qwen3-coder
+├── moonshot.json       # kimi-k2.7-code(-highspeed), kimi-k2.6, moonshot-v1-*
 ├── cerebras.json       # zai-glm-4.7, gpt-oss-120b
-├── ollamacloud.json    # kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, glm-5.1, deepseek-v4-flash, nemotron-3-ultra
-└── zenmux.json         # glm-5.2-free 🆓, kimi-k2.7-code-free 🆓 (free tier only)
+├── zai.json            # glm-5.2, glm-5.1, glm-4.7(-flash/-flashx)
+├── ollama.json         # Ollama Cloud: kimi-k2.7-code, glm-5.2/5.1, deepseek-v4-pro/flash, minimax-m3, nemotron-3-*, gpt-oss:120b
+├── zenmux.json         # whole roster disabled 2026-07-31 (HTTP 402 reject_no_credit)
+├── mistral.json        # ships disabled (needs PROVIDER_MISTRAL_API_KEY + live verification)
+├── siliconflow.json    # ships disabled (needs PROVIDER_SILICONFLOW_API_KEY)
+└── cloudflare.json     # ships disabled (needs API key + PROVIDER_CLOUDFLARE_BASE_URL)
 ```
 
 ---
@@ -312,7 +319,7 @@ User sends model = "nvidia/qwen3.5-397b-a17b"
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **JSON parsing:** `System.Text.Json` source-generated (no reflection)
 - **Typical latency:** <10ms proxy overhead
-- **Test count:** 551 tests, all green (1 skipped)
+- **Test count:** 557 tests, all green (1 skipped)
 
 ---
 

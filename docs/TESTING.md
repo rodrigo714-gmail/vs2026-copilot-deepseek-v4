@@ -27,8 +27,8 @@ The proxy includes a comprehensive test suite covering every component of the ro
 
 ### Test Statistics
 
-- **Total Tests:** 551
-- **Status:** ✅ All passing (551 passed, 1 skipped)
+- **Total Tests:** 557
+- **Status:** ✅ All passing (557 passed, 1 skipped)
 - **Framework:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing`
 - **Coverage Areas:**
   - ✅ Endpoint routing (OpenAI `/v1/*` & Ollama `/api/*` formats)
@@ -157,39 +157,35 @@ Validates that `RequestTransformer.ApplyExecutionDefaults()` correctly injects d
 - ✅ `deepseek-v4-flash` — reasoning_effort injected, top_p omitted
 - ✅ `deepseek-coder-6.7b-instruct` — disabled in config, not tested as a "preferred" model
 
-**NVIDIA NIM Models (5 curated for coding + Copilot):**
-- ✅ qwen/qwen3-coder-480b-a35b-instruct
-- ✅ moonshotai/kimi-k2.6
-- ✅ nvidia/nemotron-3-super-120b-a12b
-- ✅ openai/gpt-oss-120b
-- ✅ qwen/qwen3.5-397b-a17b
+**NVIDIA NIM Models (8):**
+- ✅ nvidia/nemotron-3-super-120b-a12b, nvidia/nemotron-3-ultra-550b-a55b, z-ai/glm-5.2, deepseek-ai/deepseek-v4-pro, openai/gpt-oss-120b, minimaxai/minimax-m3, nvidia/llama-3.3-nemotron-super-49b-v1.5, meta/llama-3.3-70b-instruct
 
-**OpenAI Models (5):**
-- ✅ gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b
+**OpenAI Models (4):**
+- ✅ gpt-5.5, gpt-5.4, gpt-5.4-mini, o4-mini
 
-**Groq Models (5):**
-- ✅ llama-3.3-70b-versatile, qwen/qwen3-32b, meta-llama/llama-4-scout-17b-16e-instruct, openai/gpt-oss-120b, openai/gpt-oss-20b
+**Groq Models (7):**
+- ✅ qwen/qwen3.6-27b, openai/gpt-oss-120b, openai/gpt-oss-20b, llama-3.3-70b-versatile, llama-3.1-8b-instant, groq/compound, groq/compound-mini (compound models: `supports_tools=false` strips client tools)
 
-**Moonshot/Kimi Models (5):**
+**Moonshot/Kimi Models (6):**
+- ✅ kimi-k2.7-code, kimi-k2.7-code-highspeed (force-mode: temperature=1.0, override_client_params=true)
 - ✅ kimi-k2.6 (force-mode: temperature=1.0, override_client_params=true)
-- ✅ kimi-k2.5 (force-mode: temperature=1.0, override_client_params=true)
 - ✅ moonshot-v1-128k, moonshot-v1-auto, moonshot-v1-32k
 
-**OpenRouter Models (5):**
-- ✅ qwen/qwen3-coder, nvidia/nemotron-3-super-120b-a12b, nvidia/nemotron-3-ultra-550b-a55b, moonshotai/kimi-k2.6, deepseek/deepseek-v4-pro
+**OpenRouter Models (10):**
+- ✅ anthropic/claude-sonnet-4.6, openai/gpt-5.4, google/gemini-3.5-flash, deepseek/deepseek-v4-pro, qwen/qwen3.7-plus, qwen/qwen3-coder, moonshotai/kimi-k2.7-code, moonshotai/kimi-k2.6, x-ai/grok-4.3, nvidia/nemotron-3-super-120b-a12b
 
 **Cerebras Models (2):**
 - ✅ zai-glm-4.7, gpt-oss-120b
 
 **Ollama Cloud Models (9 enabled):**
-- ✅ kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, glm-5.1, deepseek-v4-flash, nemotron-3-ultra
+- ✅ kimi-k2.7-code, glm-5.2, deepseek-v4-pro, minimax-m3, nemotron-3-ultra, nemotron-3-super, glm-5.1, deepseek-v4-flash, gpt-oss:120b
 
 #### Expected Behavior
 
 | Model | reasoning_effort | temperature | top_p | top_k | override_client_params | Result |
 |-------|------------------|-------------|-------|-------|------------------------|--------|
 | deepseek-v4-pro | ✅ injected | ✅ injected | ❌ omitted (reasoner) | ❌ filtered | false | Valid |
-| gpt-5 | ❌ injected (o-series) | ✅ injected | ✅ injected | ❌ filtered | false | Valid |
+| o4-mini | ✅ injected | ❌ stripped (`supports_temperature=false`) | ❌ stripped | ❌ filtered | false | Valid |
 | llama-3.3-70b (NVIDIA) | ❌ filtered | ✅ injected | ✅ injected | ✅ injected | false | Valid |
 | kimi-k2.6 (moonshot) | n/a | ✅ **overrides client** (1.0) | ✅ injected | ❌ filtered | **true** | Forced |
 | moonshot-v1-128k | n/a | ✅ injected (default) | ✅ injected | ❌ filtered | false | Preserves client |
@@ -210,7 +206,7 @@ The proxy ships with the following test files in `tests/ProxyTests/`:
 |------|------:|---------|
 | `EndpointTests.cs` | ~20 | End-to-end HTTP behaviour with `WebApplicationFactory` + stub provider |
 | `ParameterValidationTests.cs` | ~50 | Per-model parameter injection (temperature, top_p, max_tokens, reasoning_effort) |
-| `RequestTransformerTests.cs` | ~25 | Filter / inject defaults, streaming SSE → NDJSON, assistant-message cleanup |
+| `RequestTransformerTests.cs` | ~27 | Filter / inject defaults, per-model `supports_tools=false` stripping, streaming SSE → NDJSON, assistant-message cleanup |
 | **`OverrideClientParamsTests.cs`** | **10** | **`override_client_params=true` force-mode overrides client values; default mode preserves them; JSON parsing of true/false/absent** |
 | **`ProviderModelHintTests.cs`** | **7** | **3-level `provider/model` hint resolution in `ProviderRegistry.ResolveModel` + `ResolveCandidates` for `model@provider`** |
 | `ProviderRegistryTests.cs` | ~15 | Provider discovery, `ResolveProvider`, `ResolveCandidates`, mapping updates |
@@ -231,7 +227,8 @@ The proxy ships with the following test files in `tests/ProxyTests/`:
 | **`UsageRollupStoreTests.cs`** | **~9** | **Restart survival, atomic write, corrupt-file recovery, retention pruning** |
 | **`DashboardEndpointTests.cs`** | **~6** | **Dashboard served from `wwwroot`, Chart.js local not CDN, quota panels present** |
 | **`DotEnvLoaderTests.cs`** | **12** | **Precedence: a real environment variable beats `.env`; an empty value never masks one** |
-| **Total** | **551** | |
+| **`ReasoningFallbackTests.cs`** | **4** | **Reasoning-only answers reach the client as content whether the upstream names the field `reasoning_content` (DeepSeek-style) or `reasoning` (Cerebras/Groq/OpenRouter), on both `/api/chat` paths** |
+| **Total** | **557** | |
 
 ---
 

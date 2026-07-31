@@ -2,7 +2,7 @@
 
 > The fastest way to run DeepSeek, OpenAI, Google, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Ollama Cloud, Mistral, SiliconFlow and Cloudflare Workers AI models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
 
-**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 551 offline tests
+**As of July 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 557 offline tests
 
 A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **14 AI providers**: DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Ollama Cloud, Mistral, SiliconFlow and Cloudflare Workers AI. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
@@ -14,7 +14,7 @@ When a provider throttles you or its free quota runs out, the request hops to th
 | **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
-| **Tests** | **551 tests**, all offline ✅ |
+| **Tests** | **557 tests**, all offline ✅ |
 | **Deploy** | Docker / bare metal |
 
 ## Key Features
@@ -32,7 +32,7 @@ When a provider throttles you or its free quota runs out, the request hops to th
 - **🎯 3-level `provider/model` hint resolution** — `nvidia/qwen3.5-397b-a17b` correctly resolves to NVIDIA's family-prefixed upstream id `qwen/qwen3.5-397b-a17b`
 - **📋 Curated model roster** — Top coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026, with pricing data from `PricingCatalog`
 - **📈 Usage Snapshots & Projections** — Periodic snapshots for weekly/monthly cost projections via `UsageSnapshotService`
-- **🖼️ Vision & Image Support** — Multi-part image content is automatically converted between OpenAI and Ollama formats for vision-capable models (e.g. kimi-k2.7-code-free, qwen3.7-plus)
+- **🖼️ Vision & Image Support** — Multi-part image content is automatically converted between OpenAI and Ollama formats for vision-capable models (e.g. qwen3.7-plus, gemini-3.5-flash)
 - **🔍 Diagnostic Response Headers** — Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, and `X-Proxy-Provider` for debugging routing decisions
 - **⚡ Ultra-Performance** — HTTP/2 connection pooling (256 connections/server), zero-copy streaming, minimal allocations
 - **📦 Zero-Copy Streaming** — SSE pass-through without buffering
@@ -136,7 +136,7 @@ Every chat completion response includes diagnostic headers to verify routing:
 | `X-Proxy-Candidate-Index` | Zero-based position of the provider that answered — non-zero means it failed over | `0`, `1` |
 | `X-Proxy-Attempts` | How many candidates were actually tried | `1`, `2` |
 | `X-Proxy-Primary-Provider` | Primary provider candidate (OpenAI endpoint) | `nvidia` |
-| `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint) | `qwen/qwen3.5-397b-a17b` |
+| `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint) | `z-ai/glm-5.2` |
 
 `X-Proxy-Provider` always names the provider that **served** the response, not the one that was
 tried first — so a value that differs from `X-Proxy-Primary-Provider` is a failover you can see.
@@ -168,12 +168,10 @@ http://localhost:11434/api/chat
 ```
 
 Top picks for coding in VS 2026:
-- `kimi2.7-code` (Ollama Cloud) — 🥇 Kimi 2.7 code-specialized, 262K context, force-mode
+- `kimi-k2.7-code` (Ollama Cloud / Moonshot) — 🥇 Kimi 2.7 code-specialized, 262K context, force-mode
 - `glm-5.2` (Ollama Cloud) — 🥈 GLM 5.2 latest, 1M context, strong reasoning
-- `qwen3-coder:480b` (Ollama Cloud) — 1.5T Qwen coder, 1M context, native tools
-- `deepseek-v4-pro` (Ollama Cloud) — DeepSeek V4 Pro, 1M context, reasoning
-- `glm-5.2-free` (ZenMux) — 🆓 1M context, gratis
-- `kimi-k2.7-code-free` (ZenMux) — 🆓 262K, visión, reasoning, gratis
+- `deepseek-v4-pro` (DeepSeek / Ollama Cloud) — DeepSeek V4 Pro, 1M context, reasoning
+- `zai-glm-4.7` (Cerebras) — GLM 4.7 at Cerebras speed, 128K context
 
 ### Continue.dev / Cursor
 
@@ -203,7 +201,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 551 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, pricing, billing, usage tracking, image support, failure classification, cooldowns and failover
+- **Test coverage:** 557 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution, reasoning fallback, pricing, billing, usage tracking, image support, failure classification, cooldowns and failover
 
 ## Testing
 
@@ -247,14 +245,16 @@ Each provider exposes a curated set of enabled models, prioritised for coding.
 | Provider | # enabled | Top picks | Notes |
 |----------|----------:|-----------|-------|
 | **DeepSeek** | 2 | deepseek-v4-pro, deepseek-v4-flash | 1M context, native reasoning |
-| **OpenAI** | 5 | gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b | o-series support |
-| **NVIDIA NIM** | 5 | qwen3-coder-480b, kimi-k2.6, nemotron-3-super, gpt-oss-120b, qwen3.5-397b | 1M context, all top coding picks |
-| **Groq** | 5 | llama-3.3-70b-versatile, qwen3-32b, llama-4-scout, gpt-oss-120b, gpt-oss-20b | Speed-optimised inference |
-| **OpenRouter** | 7 | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro | Multi-backend passthrough |
-| **Moonshot/Kimi** | 6 | kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1-* | Kimi K2.x forces `temperature=1.0` |
+| **OpenAI** | 4 | gpt-5.5, gpt-5.4, gpt-5.4-mini, o4-mini | GPT-5.x/o-series use `max_completion_tokens`, no explicit temperature |
+| **Google** | 8 | gemini-3.5-flash, gemini-3.1/3-pro-preview, gemini-3-flash-preview, gemini-2.5-* | 🆓 free-tier daily quota; 429s recover at midnight PT |
+| **NVIDIA NIM** | 8 | nemotron-3-super/ultra, glm-5.2, deepseek-v4-pro, gpt-oss-120b, minimax-m3, llama-3.3-* | Free tier queues some models |
+| **Groq** | 7 | qwen3.6-27b, gpt-oss-120b/20b, llama-3.3-70b, llama-3.1-8b, compound(-mini) | Speed-optimised; compound = server-side tools only |
+| **OpenRouter** | 10 | claude-sonnet-4.6, gpt-5.4, gemini-3.5-flash, kimi-k2.7-code/k2.6, grok-4.3, qwen3.7-plus, qwen3-coder | Multi-backend passthrough |
+| **Moonshot/Kimi** | 6 | kimi-k2.7-code(-highspeed), kimi-k2.6, moonshot-v1-* | Kimi K2.x forces `temperature=1.0` |
 | **Cerebras** | 2 | zai-glm-4.7, gpt-oss-120b | Small curated set |
-| **Ollama Cloud** | 10 | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, deepseek-v4-pro | Podio + 1M context GLM/Minimax/Qwen |
-| **ZenMux** | 2 **(free tier)** | **glm-5.2-free 🆓**, **kimi-k2.7-code-free 🆓** | Multi-model aggregator, more models can be enabled in config |
+| **Z.AI** | 5 | glm-5.2, glm-5.1, glm-4.7(-flash/-flashx) | glm-4.7-flash is 🆓; the rest need account balance |
+| **Ollama Cloud** | 9 | kimi-k2.7-code, glm-5.2, deepseek-v4-pro/flash, minimax-m3, nemotron-3-*, glm-5.1, gpt-oss:120b | Tool calls fully converted for /v1 agent clients |
+| **ZenMux** | 0 *(disabled 2026-07-31)* | — | Whole roster answered HTTP 402 `reject_no_credit`; top up at zenmux.ai and re-enable in config |
 | **Mistral** | 0 *(ships disabled)* | mistral-large, devstral-medium, codestral | 🆓 largest free pool (~1B tok/mo) but only ~2 RPM — a fallback, not a primary |
 | **SiliconFlow** | 0 *(ships disabled)* | Qwen3-8B, DeepSeek-V3, GLM-4-9B | 🆓 free models capped at 50 req/day without purchased credit |
 | **Cloudflare Workers AI** | 0 *(ships disabled)* | llama-3.3-70b-fp8-fast, qwen2.5-coder-32b | 🆓 10k neurons/day, resets 00:00 UTC. **Requires `PROVIDER_CLOUDFLARE_BASE_URL`** (it embeds your account id) |

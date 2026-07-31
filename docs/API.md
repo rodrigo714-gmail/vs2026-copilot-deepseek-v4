@@ -1,6 +1,6 @@
 # Multi-Provider AI Proxy - API Reference
 
-Complete API documentation for the C# multi-provider proxy supporting DeepSeek, OpenAI, NVIDIA NIM, OpenRouter, Groq, Moonshot/Kimi, Cerebras, Ollama Cloud, and ZenMux.
+Complete API documentation for the C# multi-provider proxy supporting 14 providers: DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Mistral, SiliconFlow and Cloudflare Workers AI.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ The proxy provides two API interfaces:
 1. **OpenAI-compatible** (`/v1/*`) — for GitHub Copilot, Cursor, Continue.dev, OpenAI SDKs
 2. **Ollama-compatible** (`/api/*`) — for Visual Studio BYOM, native Ollama clients
 
-Both interfaces route requests to the configured backend provider (DeepSeek, OpenAI, NVIDIA, OpenRouter, Groq, Moonshot/Kimi, Cerebras, Ollama Cloud, ZenMux) based on the requested model name.
+Both interfaces route requests to the configured backend provider (any of the 14 registered in `ProviderCapabilitiesRegistry`) based on the requested model name.
 
 ### Base URL
 
@@ -68,10 +68,10 @@ curl http://localhost:11434/health
   ],
   "availableModels": [
     "deepseek-v4-pro",
-    "gpt-5",
-    "kimi2.7-code",
+    "gpt-5.5",
+    "kimi-k2.7-code",
     "glm-5.2",
-    "z-ai/glm-5.2-free",
+    "z-ai/glm-5.2",
     "... (~60 models total)"
   ],
   "defaultModel": "deepseek-v4-pro"
@@ -99,7 +99,7 @@ Both `/v1/chat/completions` and `/api/chat` endpoints include diagnostic respons
 | `X-Proxy-Candidate-Index` | Zero-based position of the provider that answered — non-zero means the request failed over | `0`, `1` |
 | `X-Proxy-Attempts` | How many candidates were actually tried before giving up | `1`, `2` |
 | `X-Proxy-Primary-Provider` | Primary candidate provider (OpenAI endpoint only) | `nvidia` |
-| `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint only) | `qwen/qwen3.5-397b-a17b` |
+| `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint only) | `z-ai/glm-5.2` |
 
 > Use these headers to verify that the expected provider is being selected. If the provider is unexpected, the model name may need a qualified alias (e.g. `model@provider:latest`).
 >
@@ -130,10 +130,10 @@ curl http://localhost:11434/v1/models
       "owned_by": "deepseek"
     },
     {
-      "id": "z-ai/glm-5.2-free",
+      "id": "z-ai/glm-5.2",
       "object": "model",
       "created": 1700000000,
-      "owned_by": "zenmux"
+      "owned_by": "nvidia"
     },
     "... (~60 total)"
   ]
@@ -165,7 +165,7 @@ Chat completion endpoint compatible with OpenAI API.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | Model ID (e.g., `deepseek-v4-pro`, `glm-5.2-free`, `kimi-k2.7-code-free`) |
+| `model` | string | Yes | Model ID (e.g., `deepseek-v4-pro`, `glm-5.2`, `kimi-k2.7-code`) |
 | `messages` | array | Yes | Message history with `role` (user/assistant/system) and `content` |
 | `messages[].content` | string/array | Yes | Plain text **or** multi-part array with `type: "text"` and `type: "image_url"` for vision models |
 | `stream` | boolean | No | Enable streaming mode (default: `false`) |
@@ -187,7 +187,7 @@ Chat completion endpoint compatible with OpenAI API.
 
 > For Ollama-format providers, the proxy automatically converts multi-part content to the `images` array format.
 
-**Supported providers:** DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux. The proxy automatically filters unsupported parameters per provider.
+**Supported providers:** DeepSeek, OpenAI, Google, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, Z.AI, ZenMux, Mistral, SiliconFlow, Cloudflare Workers AI. The proxy automatically filters unsupported parameters per provider, and strips `tools`/`tool_choice` for models flagged `supports_tools=false`.
 
 **Diagnostic headers:** Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Provider`, `X-Proxy-Candidate-Count`, `X-Proxy-Primary-Provider`, `X-Proxy-Primary-Upstream`.
 
@@ -242,7 +242,7 @@ Chat completion endpoint (Ollama-compatible).
 **Request Body:**
 ```json
 {
-  "model": "glm-5.2-free",
+  "model": "glm-5.2",
   "messages": [
     {"role": "user", "content": "What is Rust?"}
   ],
@@ -271,7 +271,7 @@ Chat completion endpoint (Ollama-compatible).
 
 ## Image Support
 
-Vision-capable models (e.g. `kimi-k2.7-code-free`, `qwen3.7-plus`, `gemini-3.5-flash`) accept images as input. The proxy supports two formats:
+Vision-capable models (e.g. `qwen3.7-plus`, `gemini-3.5-flash`) accept images as input. The proxy supports two formats:
 
 ### OpenAI Format (multi-part content array)
 ```json
@@ -326,8 +326,8 @@ Vision-capable models (e.g. `kimi-k2.7-code-free`, `qwen3.7-plus`, `gemini-3.5-f
 1. **Request arrives** with model name
 2. **Proxy resolves** via `ProviderRegistry.ResolveModel()` (3-level hint resolution)
 3. **Candidate selection** via `ProviderRegistry.ResolveCandidates()`:
-   - Bare id like `glm-5.2-free`: returns every provider offering it, ordered by priority
-   - Qualified id like `z-ai/glm-5.2-free@zenmux`: returns only that provider (no failover)
+   - Bare id like `glm-5.2`: returns every provider offering it, ordered by priority
+   - Qualified id like `z-ai/glm-5.2@nvidia`: returns only that provider (no failover)
 4. **Route planning** via `ProviderRegistry.ResolveRoutePlan()`: the candidate list is reordered so
    providers currently in cooldown are tried last. Never filtered to empty — a last-ditch attempt
    beats a dead end. A single-candidate pin is untouched.
@@ -460,9 +460,8 @@ The failover history is a log and deliberately survives a reset.
 ## Force-Mode Parameter Override
 
 Some models have hard requirements. The proxy uses `override_client_params` for:
-- Moonshot `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5` (mandates `temperature=1.0`)
-- Ollama Cloud `kimi2.7-code`, `kimi-k2.6`
-- ZenMux `kimi-k2.7-code-free` (mirrors the Kimi force-mode rule)
+- Moonshot Kimi K2.x models (mandate `temperature=1.0`)
+- Ollama Cloud `kimi-k2.7-code` (same rule)
 
 ---
 

@@ -3,6 +3,44 @@
 All notable changes to AI Proxy Hub (formerly "Multi-Provider AI Proxy") will be documented in
 this file.
 
+## 2026-07-31 (3) — VS 2026 agent mode actually works: reasoning fallback, tool-call conversion, tools stripping
+
+Found by driving every published model through the three paths VS 2026 uses — plain chat,
+BYOM streaming, and agent mode with tools — rather than plain chat alone.
+
+### Fixed
+- **Reasoning-only answers arrived blank from Cerebras, Groq and OpenRouter.** Those providers
+  name the field `reasoning`, not `reasoning_content`, so the empty-content fallback never fired
+  and a model that spent its whole token budget thinking looked silent. Both `/api/chat` paths
+  (streaming and not) now accept either field name (`ReasoningFallbackTests.cs`).
+- **Every Ollama Cloud model was text-only in agent mode.** The `/v1` ↔ Ollama-native conversion
+  dropped `tool_calls` on the streaming path and forwarded them in Ollama's shape (object
+  arguments, no id) on the non-streaming one — either way the OpenAI SDK in VS saw no usable
+  tool call. Tool calls now convert in both directions: generated `id` + `type=function` +
+  string `arguments` + `finish_reason: "tool_calls"` on the way down, and agent history
+  (`tool_calls`, `tool_call_id`) rewritten to Ollama format on the way up.
+- **Every successful non-streaming `/v1` call to an Ollama upstream aborted the connection.**
+  The handler wrote the response body first and the caller stamped `X-Proxy-*` headers after —
+  "Headers are read-only, response has already started", and Kestrel dropped the connection.
+  Headers now go out before the first body byte.
+- **Groq's `compound`/`compound-mini` answered HTTP 400 to any agent request.** They run Groq's
+  own server-side tools and reject a client tools payload. `execution.supports_tools: false` now
+  makes `RequestTransformer` strip `tools`/`tool_choice` per model.
+- **OpenAI `gpt-5.5` answered 400 in agent mode**: "Function tools with reasoning_effort are not
+  supported for gpt-5.5". The configured `reasoning_effort` default was removed for the 5.5
+  family; it reasons at its default effort instead.
+
+### Changed
+- **ZenMux roster disabled entirely** — every model answered HTTP 402 `reject_no_credit` on
+  2026-07-31. The entries stay in `zenmux.json` with a comment; top up and re-enable.
+
+### Notes
+- Live e2e status on the fixed build (61 published models): every reachable provider passes all
+  three paths. Remaining failures are external — Google free-tier daily quota (429, recovers at
+  midnight PT), Z.AI account balance (only `glm-4.7-flash` is free), two NVIDIA models queueing
+  past their timeout, and intermittent local DNS on the dev machine.
+- 551 → 557 tests.
+
 ## 2026-07-31 (2) — Fix Groq's unusable roster, .env precedence, and failover on dead providers
 
 Three problems found by running the proxy against real provider keys rather than stubs.
