@@ -468,7 +468,11 @@ public class ParameterValidationTests
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000,  16_384)]
     [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", 131_072, 16_384)]
     [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
-    [InlineData("zai-glm-4.7",  128_000, 32_768)]
+    // Cerebras caps this one at 8192 for messages and completion combined, verified live against
+    // the API on 2026-07-31. It was published as 128000 and VS 2026 agent mode believed it, so
+    // every agent turn was rejected with context_length_exceeded. The cap is per-model, not
+    // account-wide: gpt-oss-120b on the same key answered a 10084-token request.
+    [InlineData("zai-glm-4.7",  8_192,   2_048)]
     [InlineData("gpt-oss-120b", 131_072, 65_536)]
     public void AllModels_HaveCorrectContextWindowConfig(
         string model, int expectedContextLength, int minMaxOutput)

@@ -91,6 +91,7 @@ internal sealed class ModelCatalogService
 
             // Always merge static aliases from config
             MergeAliases(newMap, newUpstream, allModels);
+            RebuildAutoAliases(newMap, newUpstream, allModels);
 
             if (allModels.Count > 0)
             {
@@ -162,6 +163,8 @@ internal sealed class ModelCatalogService
             }
         }
 
+        RebuildAutoAliases(newMap, newUpstream, models);
+
         if (models.Count > 0)
         {
             _providerRegistry.UpdateModelMappings(newMap, newUpstream);
@@ -215,6 +218,97 @@ internal sealed class ModelCatalogService
             }
         }
     }
+
+    /// <summary>
+    /// The identity under which the same model offered by different providers becomes one choice.
+    /// Providers publish it under different ids — Cerebras <c>gpt-oss-120b</c>, Groq and NVIDIA
+    /// <c>openai/gpt-oss-120b</c>, Ollama <c>gpt-oss:120b</c> — so the vendor prefix is dropped and
+    /// the colon of an Ollama size tag folded to a dash.
+    ///
+    /// Deliberately conservative. Failing to group two spellings of one model merely omits an AUTO
+    /// entry; grouping two genuinely different models would send a request to a model the user
+    /// never picked, which is far worse. That is why nothing here strips version or variant
+    /// suffixes: <c>nemotron-3-super-120b-a12b</c> and <c>…-a12b:free</c> stay separate.
+    /// </summary>
+    internal static string AutoAliasKey(string model)
+    {
+        string clean = model.Trim();
+        int slash = clean.IndexOf('/');
+        if (slash > 0 && slash < clean.Length - 1)
+            clean = clean[(slash + 1)..];
+        return clean.Replace(':', '-').ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Rebuilds the unpinned <c>@auto</c> aliases: one per model that at least two active
+    /// providers serve, listing them best-first by the same (priority, provider order) rule the
+    /// pinned catalog uses to settle cross-provider collisions.
+    ///
+    /// Built from the model-selection config rather than from live discovery so that the aliases
+    /// exist before the first provider catalog fetch returns, and so they always agree with the
+    /// <c>/api/tags</c> list, which is built from that same config.
+    ///
+    /// A model only one provider serves gets no alias: <c>@auto</c> would resolve to exactly the
+    /// pinned entry, so publishing it would double the length of the model dropdown to say
+    /// nothing new.
+    /// </summary>
+    private void RebuildAutoAliases(Dictionary<string, ProviderInfo> map, Dictionary<string, string> upstream, List<string> models)
+    {
+        Dictionary<string, List<AutoCandidate>> groups = new(StringComparer.OrdinalIgnoreCase);
+
+        for (int order = 0; order < _providerRegistry.Providers.Count; order++)
+        {
+            ProviderInfo provider = _providerRegistry.Providers[order];
+            foreach (ModelSelectionEntry entry in _modelSelectionStore.GetProviderModelSelections(provider.Name))
+            {
+                if (!entry.Enabled) continue;
+
+                string key = AutoAliasKey(entry.Match);
+                if (key.Length == 0) continue;
+
+                string up = string.IsNullOrWhiteSpace(entry.Upstream) ? entry.Match : entry.Upstream;
+                if (!groups.TryGetValue(key, out List<AutoCandidate>? list))
+                {
+                    list = [];
+                    groups[key] = list;
+                }
+                list.Add(new AutoCandidate(provider, up, entry.Priority, order));
+            }
+        }
+
+        Dictionary<string, List<(ProviderInfo Provider, string UpstreamModel)>> aliases = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ((string key, List<AutoCandidate> list) in groups)
+        {
+            // One attempt per provider. A provider listing the same model under both its bare and
+            // vendor-prefixed id would otherwise be tried twice in a row, spending two candidates
+            // to hit the identical failure.
+            List<(ProviderInfo Provider, string UpstreamModel)> ordered = [.. list
+                .GroupBy(c => c.Provider.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderBy(c => c.Priority).ThenBy(c => c.UpstreamModel.Length).First())
+                .OrderBy(c => c.Priority)
+                .ThenBy(c => c.Order)
+                .Select(c => (c.Provider, c.UpstreamModel))];
+
+            if (ordered.Count < 2) continue;
+
+            string alias = $"{key}@{ProviderRegistry.AutoProviderToken}";
+            aliases[alias] = ordered;
+
+            // Register it as an ordinary model too, so /v1/models lists it, IsModelKnown accepts
+            // it and the incidental single-provider lookups resolve to the preferred candidate.
+            if (!map.ContainsKey(alias))
+            {
+                map[alias] = ordered[0].Provider;
+                upstream[alias] = ordered[0].UpstreamModel;
+                if (!models.Contains(alias)) models.Add(alias);
+            }
+        }
+
+        _providerRegistry.UpdateAutoAliases(aliases);
+    }
+
+    private readonly record struct AutoCandidate(ProviderInfo Provider, string UpstreamModel, int Priority, int Order);
 
     private readonly record struct Claimant(ProviderInfo Provider, string UpstreamId, int Priority);
 

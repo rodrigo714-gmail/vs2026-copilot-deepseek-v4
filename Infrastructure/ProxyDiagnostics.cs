@@ -18,6 +18,12 @@ internal static class ProxyDiagnostics
         ctx.Response.Headers["X-Proxy-Provider"] = provider.Name;
         ctx.Response.Headers["X-Proxy-Upstream-Model"] = upstreamModel;
         ctx.Response.Headers["X-Proxy-Candidate-Index"] = candidateIndex.ToString();
+
+        // The candidate index is zero-based and every earlier candidate was tried and failed, so
+        // the winning index plus one is how many were burned. Set here rather than only on the
+        // all-candidates-failed paths: the header is documented as always present, and a
+        // succeeded-on-the-third-try response is exactly when a reader wants to know.
+        ctx.Response.Headers["X-Proxy-Attempts"] = (candidateIndex + 1).ToString();
     }
 
     /// <summary>

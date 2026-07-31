@@ -27,8 +27,8 @@ The proxy includes a comprehensive test suite covering every component of the ro
 
 ### Test Statistics
 
-- **Total Tests:** 557
-- **Status:** ✅ All passing (557 passed, 1 skipped)
+- **Total Tests:** 585
+- **Status:** ✅ All passing (585 passed, 1 skipped)
 - **Framework:** xUnit 2.9.3 + `Microsoft.AspNetCore.Mvc.Testing`
 - **Coverage Areas:**
   - ✅ Endpoint routing (OpenAI `/v1/*` & Ollama `/api/*` formats)
@@ -220,15 +220,16 @@ The proxy ships with the following test files in `tests/ProxyTests/`:
 | `JsonDefaultsTests.cs` | ~9 | `System.Text.Json` snake_case + null handling |
 | `PricingCatalogTests.cs` | ~15 | Price lookup, provider fallbacks, and the guard that every registered provider has one |
 | **`ProviderCapabilitiesRegistryTests.cs`** | **~35** | **Guard: every provider declares its fields, prefixes/URLs/display names are unique, paths are relative, exactly one config file declares it** |
-| **`UpstreamFailureClassifierTests.cs`** | **~45** | **Real 429/413 bodies from Groq, Gemini, Cloudflare, OpenAI; `Retry-After` in every documented form** |
+| **`UpstreamFailureClassifierTests.cs`** | **~56** | **Real 429/413 bodies from Groq, Gemini, Cloudflare, OpenAI, Cerebras; a named short window (per-minute, TPM/RPM) outranks incidental "quota" wording; `Retry-After` in every documented form** |
 | **`ProviderHealthServiceTests.cs`** | **23** | **Cooldown durations, DST/month boundaries, success decay, ordering never returns empty** |
-| **`FailoverTests.cs`** | **25** | **Two scripted stubs: failover on all four chat paths, 400 burns one candidate, pins never fail over, cooldown skips a dead provider** |
+| **`FailoverTests.cs`** | **26** | **Two scripted stubs: failover on all four chat paths, 400 burns one candidate, pins never fail over, cooldown skips a dead provider, `X-Proxy-Attempts` counts burned candidates on success too** |
+| **`AutoAliasTests.cs`** | **11** | **`model@auto` fan-out: grouping folds one model's per-provider spellings without merging different models, every tag form resolves, candidates carry a per-provider upstream id, pins still yield one candidate, cooling providers go last, `/api/tags` AUTO entries advertise the floor of their candidates** |
 | **`FreeTierCatalogTests.cs`** | **~13** | **Pool dedup, uncapped never summed, signup credits separated, malformed catalog yields no budget** |
 | **`UsageRollupStoreTests.cs`** | **~9** | **Restart survival, atomic write, corrupt-file recovery, retention pruning** |
 | **`DashboardEndpointTests.cs`** | **~6** | **Dashboard served from `wwwroot`, Chart.js local not CDN, quota panels present** |
 | **`DotEnvLoaderTests.cs`** | **12** | **Precedence: a real environment variable beats `.env`; an empty value never masks one** |
 | **`ReasoningFallbackTests.cs`** | **4** | **Reasoning-only answers reach the client as content whether the upstream names the field `reasoning_content` (DeepSeek-style) or `reasoning` (Cerebras/Groq/OpenRouter), on both `/api/chat` paths** |
-| **Total** | **557** | |
+| **Total** | **585** | |
 
 ---
 

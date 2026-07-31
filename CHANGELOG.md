@@ -3,6 +3,57 @@
 All notable changes to AI Proxy Hub (formerly "Multi-Provider AI Proxy") will be documented in
 this file.
 
+## 2026-07-31 (4) — Failover reaches Visual Studio at last: `@auto` aliases, TPM misread as a daily quota, Cerebras context cap
+
+Found by running "corre los tests" through VS 2026 agent mode against four providers in turn.
+Three failed, each for a different reason, and none of them failed over.
+
+### Added
+- **`model@auto` — the unpinned alias, published by `/api/tags` as `AUTO - <model>`.** Every id
+  the endpoint published was provider-pinned, so a client picking from that list resolved to a
+  single candidate: the failover machinery could never engage on the one path that matters, and
+  an upstream 402 or 413 reached the IDE as a hard error with thirteen healthy providers idle.
+  An AUTO entry lists every provider serving the model, best first, cooling ones last.
+  - Published only where two or more configured providers serve the model — with one it would be
+    the pinned entry under another name.
+  - `ModelCatalogService.AutoAliasKey` groups the per-provider spellings of one model
+    (`gpt-oss-120b`, `openai/gpt-oss-120b`, `gpt-oss:120b`) by dropping the vendor prefix and
+    folding the Ollama size tag. Nothing else is stripped: under-grouping costs an entry,
+    over-grouping would route to a model nobody picked.
+  - Advertised `context_length` / `max_output_tokens` are the **floor** across candidates and
+    `supports_tools` their AND — a limit sized against the tag list has to hold for whichever
+    candidate answers.
+  - Pinned entries are untouched: "GROQ - x" still means Groq and only Groq.
+
+### Fixed
+- **A per-minute throttle stood a provider down until midnight.** Cerebras answers an over-TPM
+  request with `{"message":"Tokens per minute limit exceeded","param":"quota","code":
+  "token_quota_exceeded"}`. "quota" appears twice — in the JSON *keys*, not the prose — so the
+  loose `quota.*exceed` pattern matched, `QuotaPeriod.Daily` followed, and a limit that clears in
+  sixty seconds cost a stand-down until local midnight. Exactly the trap
+  `UpstreamFailureClassifier`'s own doc comment says it exists to avoid. A quota pattern that does
+  not name its own window is now vetoed when the body names a short one (per minute/second,
+  TPM/RPM); `daily-limit`, `monthly-limit`, Cloudflare and Google are never vetoed, and neither
+  are credit balances.
+- **Cerebras `zai-glm-4.7` was published with a 128000 context; the real cap is 8192** for
+  messages and completion combined. VS 2026 agent mode believed the roster, sent 13310 tokens and
+  got `400 context_length_exceeded` every turn. Verified live: a 60k prompt reports
+  "limit is 8192". The cap is per-model, not account-wide — `gpt-oss-120b` on the same key
+  answered a 10084-token request, so its 131072 stands.
+- **`X-Proxy-Attempts` was missing from every successful response.** It was written only on the
+  all-candidates-failed paths, so the response that most needs it — succeeded, but not on the
+  first try — carried no header at all, while five documents described it as always present.
+
+### Notes
+- Live confirmation of the new alias: `gemini-3.5-flash@auto` → Google returned 503 → the walk
+  moved to OpenRouter → HTTP 200, `X-Proxy-Candidate-Index: 1`. The same pick as a pinned entry
+  would have surfaced the 503.
+- OpenRouter's 402 and Groq's 413 in the same session were account limits, not bugs: OpenRouter
+  had credit for 3754 of the 8192 tokens requested, and Groq's free tier caps `gpt-oss-120b` at
+  8000 TPM against agent mode's 25397. Both were classified correctly; they were simply pinned
+  with nowhere to go.
+- 557 → 585 tests, and one existing test updated because it enshrined the wrong Cerebras context.
+
 ## 2026-07-31 (3) — VS 2026 agent mode actually works: reasoning fallback, tool-call conversion, tools stripping
 
 Found by driving every published model through the three paths VS 2026 uses — plain chat,

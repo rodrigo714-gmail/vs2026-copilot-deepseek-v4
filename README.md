@@ -22,7 +22,7 @@ Copilot / Cursor / SDKs ──▶ /v1/chat/… ┴──▶ AI Proxy Hub ──�
 | **Framework** | .NET 10, ASP.NET Core minimal APIs (`CreateSlimBuilder`), zero NuGet dependencies |
 | **Default port** | `11434` — the Ollama port, so clients need no reconfiguration |
 | **Providers** | 14 |
-| **Tests** | 557 passing, xUnit + `WebApplicationFactory`, no network required |
+| **Tests** | 585 passing, xUnit + `WebApplicationFactory`, no network required |
 | **Deploy** | `dotnet run`, Docker, or docker-compose |
 
 ## Quick start
@@ -81,13 +81,34 @@ you have spent this month, and any active cooldown. Usage is written to
 > pool. Mistral has the largest free pool of any provider (~1B tokens/month) behind roughly two
 > requests per minute — a good fallback for chat, a poor primary for completions.
 
-## Choosing a provider explicitly
+## Choosing a provider — pinned or automatic
 
-`/api/tags` publishes every model as `<model>@<provider>:latest`, so picking
-"GROQ - gpt-oss-120b" in Visual Studio pins the request to Groq even though NVIDIA and
-Cerebras also serve a model by that name. A pinned request never fails over and is never
-reordered around a cooldown: answering an explicit choice from somewhere else is worse than an
-honest error.
+`/api/tags` publishes every model twice.
+
+**Pinned** — `GROQ - gpt-oss-120b` → `gpt-oss-120b@groq:latest`. The request goes to Groq even
+though NVIDIA, Cerebras and Ollama also serve a model by that name. A pinned request never fails
+over and is never reordered around a cooldown: answering an explicit choice from somewhere else
+is worse than an honest error.
+
+**Automatic** — `AUTO - gpt-oss-120b` → `gpt-oss-120b@auto:latest`. Every provider that serves
+the model, best first, with cooling ones moved to the back. This is what makes failover reachable
+from Visual Studio at all: pick a pinned entry and an upstream 402 or 413 lands in the IDE as a
+hard error while thirteen healthy providers sit idle.
+
+```
+AUTO - gemini-3.5-flash  →  google returns 503  →  openrouter answers 200
+                            X-Proxy-Provider: openrouter
+                            X-Proxy-Candidate-Index: 1
+```
+
+An AUTO entry appears only where two or more configured providers serve the model, and it
+advertises the **smallest** context and output limit among them — a limit you size a request
+against has to hold for whichever provider ends up answering.
+
+Providers spell the same model differently (`gpt-oss-120b`, `openai/gpt-oss-120b`,
+`gpt-oss:120b`), so grouping drops the vendor prefix and folds the Ollama size tag. It is
+deliberately conservative: two variants that might be different models — `…-a12b` and
+`…-a12b:free` — stay separate.
 
 ## Dashboard
 
@@ -134,7 +155,7 @@ A model appearing in `/v1/models` is not proof you are entitled to it — it can
 script and enable only what actually responds.
 
 ```bash
-dotnet test           # 557 offline tests
+dotnet test           # 585 offline tests
 ```
 
 ## Documentation

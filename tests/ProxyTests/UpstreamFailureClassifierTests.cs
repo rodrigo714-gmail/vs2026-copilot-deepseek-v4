@@ -289,4 +289,72 @@ public sealed class UpstreamFailureClassifierTests
     {
         Assert.Null(UpstreamFailureClassifier.Classify(429, null, null).RetryAfter);
     }
+
+    // ── A named short window outranks incidental quota vocabulary ────────────
+
+    /// <summary>
+    /// The exact body Cerebras returns for an over-TPM request, captured live on 2026-07-31.
+    /// "quota" appears twice — in the JSON keys, not the prose — so /quota.*exceed/ matched and
+    /// the provider was stood down until local midnight over a limit that clears in a minute.
+    /// </summary>
+    private const string CerebrasTpmBody =
+        """{"message":"Tokens per minute limit exceeded - too many tokens processed.","type":"too_many_tokens_error","param":"quota","code":"token_quota_exceeded"}""";
+
+    [Fact]
+    public void CerebrasPerMinuteBody_IsRateLimit_NotADailyQuota()
+    {
+        UpstreamFailure f = Classify(429, CerebrasTpmBody);
+
+        Assert.Equal(UpstreamFailureKind.RateLimit, f.Kind);
+        Assert.Equal(QuotaPeriod.None, f.Period);
+        Assert.True(UpstreamFailureClassifier.ShouldFailover(f));
+    }
+
+    [Theory]
+    // Cerebras, verbatim.
+    [InlineData("""{"message":"Tokens per minute limit exceeded","param":"quota","code":"token_quota_exceeded"}""")]
+    // Same shape with the words the other way round.
+    [InlineData("""{"error":"Quota exceeded: 8000 tokens per minute for this model"}""")]
+    // Requests rather than tokens.
+    [InlineData("""{"error":{"message":"You have exceeded your quota of 30 requests per minute."}}""")]
+    // Acronym form, no "per minute" spelled out.
+    [InlineData("""{"error":{"message":"Quota exceeded (TPM): limit 8000","code":"rate_limit"}}""")]
+    // A plan cap that is really a throttle.
+    [InlineData("""{"error":{"message":"Your plan limit of 6000 tokens per minute was reached."}}""")]
+    public void QuotaWordingAroundAPerMinuteLimit_IsRateLimit(string body)
+    {
+        UpstreamFailure f = Classify(429, body);
+
+        Assert.Equal(UpstreamFailureKind.RateLimit, f.Kind);
+        Assert.Equal(QuotaPeriod.None, f.Period);
+    }
+
+    [Theory]
+    // An explicitly daily budget stays daily even when the same body quotes a per-minute rate:
+    // the pattern that matched names its own window, so there is nothing to second-guess.
+    [InlineData("""{"error":{"message":"Daily limit reached (100000 tokens). Your rate is 6000 tokens per minute."}}""", QuotaPeriod.Daily)]
+    [InlineData("""{"error":{"message":"Monthly quota exhausted; per minute limits also apply."}}""", QuotaPeriod.Monthly)]
+    // Cloudflare's daily allocation, with throttle wording bolted on.
+    [InlineData("""{"errors":[{"message":"you have used up your daily free allocation of 10,000 neurons (limit 300 requests per minute)"}]}""", QuotaPeriod.Daily)]
+    // A spent balance is not a window that rolls over, so "per minute" nearby says nothing.
+    [InlineData("""{"error":{"message":"Insufficient balance. Rate limits are 60 requests per minute."}}""", QuotaPeriod.Credit)]
+    public void ExplicitLongWindow_SurvivesNearbyPerMinuteWording(string body, QuotaPeriod expected)
+    {
+        UpstreamFailure f = Classify(429, body);
+
+        Assert.Equal(UpstreamFailureKind.QuotaExhausted, f.Kind);
+        Assert.Equal(expected, f.Period);
+    }
+
+    [Fact]
+    public void GroqOverTpm413_StaysRateLimit()
+    {
+        // Regression guard for the 413 reclassification: this body names a short window but no
+        // quota at all, so it must reach the rate-limit branch exactly as it did before.
+        UpstreamFailure f = Classify(413,
+            """{"error":{"message":"Request too large for model `openai/gpt-oss-120b` in organization `org_x` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Requested 25397, please reduce your message size and try again.","type":"tokens","code":"rate_limit_exceeded"}}""");
+
+        Assert.Equal(UpstreamFailureKind.RateLimit, f.Kind);
+        Assert.True(UpstreamFailureClassifier.ShouldFailover(f));
+    }
 }

@@ -218,6 +218,18 @@ The `/api/tags` endpoint now returns `model` fields in the format `model@provide
 
 **For bare model names** (e.g., `deepseek-v4-pro`), the proxy resolves to the lowest-priority claimant provider based on discovery order. To pin a specific provider, use the qualified `model@provider` form.
 
+**To route across providers instead of pinning one**, use the `model@auto` form that `/api/tags`
+publishes alongside each pinned entry as `AUTO - <model>`:
+
+1. `/api/tags` returns `"model": "gpt-oss-120b@auto:latest"`
+2. `ResolveCandidates` returns every provider serving that model, ordered by configured priority
+3. `ResolveRoutePlan` moves any provider in cooldown to the back
+4. The walk stops at the first provider that answers
+
+`auto` is reserved and can never be a provider name. AUTO entries exist only for models served by
+two or more configured providers, and they advertise the smallest context and output limit among
+their candidates rather than the largest.
+
 ---
 
 ## Diagnostic Response Headers

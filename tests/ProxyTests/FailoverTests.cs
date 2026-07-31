@@ -144,6 +144,31 @@ public class FailoverTests(FailoverFixture fixture)
     }
 
     /// <summary>
+    /// <c>X-Proxy-Attempts</c> is documented as always present, but it used to be written only on
+    /// the all-candidates-failed paths. That left it absent from the one response a reader most
+    /// wants it on: the request that succeeded, just not on the first try.
+    /// </summary>
+    [Fact]
+    public async Task AttemptsHeader_CountsBurnedCandidates_OnSuccessToo()
+    {
+        string primary = await DiscoverPrimaryProviderAsync();
+
+        await fixture.ResetAsync();
+        HttpResponseMessage straightThrough = await fixture.Client.PostAsync("/v1/chat/completions", OpenAiBody(stream: false));
+
+        Assert.Equal(HttpStatusCode.OK, straightThrough.StatusCode);
+        Assert.Equal("1", straightThrough.Headers.GetValues("X-Proxy-Attempts").Single());
+
+        await fixture.ResetAsync();
+        fixture.StubNamed(primary).Fail(429, QuotaBody);
+        HttpResponseMessage failedOver = await fixture.Client.PostAsync("/v1/chat/completions", OpenAiBody(stream: false));
+
+        Assert.Equal(HttpStatusCode.OK, failedOver.StatusCode);
+        Assert.Equal("2", failedOver.Headers.GetValues("X-Proxy-Attempts").Single());
+        Assert.Equal("1", failedOver.Headers.GetValues("X-Proxy-Candidate-Index").Single());
+    }
+
+    /// <summary>
     /// The reason this whole feature exists: /api/chat is the Visual Studio 2026 BYOM path and
     /// used to resolve a single provider with no retry at all.
     /// </summary>
